@@ -1,0 +1,6 @@
+{
+  "name": "블로그 이미지 최적화도구",
+  "description": "네이버 블로그, 티스토리, 워드프레스 맞춤 이미지 변환, 크롭, 리사이징 및 화살표/텍스트/모자이크 편집 스튜디오",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
