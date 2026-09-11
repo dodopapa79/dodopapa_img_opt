@@ -61,6 +61,7 @@ export interface ThumbnailTextLayer {
   x: number; // 0 to canvasWidth
   y: number; // 0 to canvasHeight
   fontSize: number;
+  baseFontSize?: number; // 1:1 (1080기준) 불변 폰트 크기 (비율 변경 시 누적 축소 방지용)
   fontFamily: string;
   fontWeight: 'normal' | 'bold' | '900';
   color: string;
@@ -78,6 +79,18 @@ export interface ThumbnailTextLayer {
   badgeBgColor: string;
   badgePadding: number;
   badgeRadius: number;
+}
+
+export interface SavedThumbnailTemplate {
+  id: string;
+  name: string;
+  savedAt: string;
+  ratio: ThumbnailRatio;
+  bgType: ThumbnailBgType;
+  gradientId: string;
+  solidColor: string;
+  dimOpacity: number;
+  texts: ThumbnailTextLayer[];
 }
 
 export interface ThumbnailConfig {
