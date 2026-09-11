@@ -12,6 +12,7 @@ import {
   generateFilename,
   loadImage,
   downloadBlob,
+  stripImageMetadata,
 } from './utils/imageProcessor';
 import { createSampleImages } from './utils/sampleImages';
 import { CheckCircle2, ShieldCheck, Zap, Image as ImageIcon, Sparkles } from 'lucide-react';
@@ -104,12 +105,9 @@ export default function App() {
         settings.startNumber
       );
 
-      // Convert file to dataURL
-      const dataUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target?.result as string);
-        reader.readAsDataURL(file);
-      });
+      // Strip all EXIF, GPS, camera metadata immediately upon upload to guarantee 100% privacy
+      const stripped = await stripImageMetadata(file);
+      const dataUrl = stripped.cleanDataUrl;
 
       const img = await loadImage(dataUrl);
 
@@ -125,8 +123,8 @@ export default function App() {
           originalFile: file,
           originalName: file.name,
           originalSize,
-          originalWidth: img.naturalWidth,
-          originalHeight: img.naturalHeight,
+          originalWidth: stripped.width,
+          originalHeight: stripped.height,
           originalDataUrl: dataUrl,
           currentDataUrl: dataUrl,
           optimizedBlob: optResult.blob,

@@ -22,7 +22,7 @@ export function Header() {
               </span>
             </div>
             <p className="text-xs text-zinc-500 hidden md:block">
-              클라이언트 100% 프라이빗 변환 · 무손실급 WebP 압축 · 화살표/모자이크 편집
+              클라이언트 100% 프라이빗 변환 · GPS/EXIF 메타데이터 100% 소거 · 무손실급 WebP 압축
             </p>
           </div>
         </div>

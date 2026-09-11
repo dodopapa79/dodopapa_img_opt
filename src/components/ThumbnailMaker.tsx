@@ -28,7 +28,7 @@ import {
   OutputFormat,
   SavedThumbnailTemplate,
 } from '../types';
-import { downloadBlob } from '../utils/imageProcessor';
+import { downloadBlob, stripImageMetadata } from '../utils/imageProcessor';
 
 const STORAGE_BG_IMAGE_KEY = 'blog_thumbnail_saved_bg_image_v3';
 const STORAGE_TEMPLATES_KEY = 'blog_thumbnail_saved_templates_v2';
@@ -68,12 +68,18 @@ const SOLID_PRESETS = [
 ];
 
 export const FONT_OPTIONS = [
-  { id: 'Pretendard', label: 'Pretendard (모던 깔끔 산세리프)', font: 'Pretendard, -apple-system, sans-serif' },
-  { id: 'Black Han Sans', label: 'Black Han Sans (강렬한 볼드 헤드라인)', font: '"Black Han Sans", sans-serif' },
-  { id: 'Gowun Batang', label: 'Gowun Batang (감성 에세이 명조)', font: '"Gowun Batang", serif' },
-  { id: 'Gowun Dodum', label: 'Gowun Dodum (단정하고 부드러운 고딕)', font: '"Gowun Dodum", sans-serif' },
-  { id: 'Nanum Pen Script', label: 'Nanum Pen Script (친근한 손글씨)', font: '"Nanum Pen Script", cursive' },
-  { id: 'Noto Sans KR', label: 'Noto Sans KR (정통 표준 고딕)', font: '"Noto Sans KR", sans-serif' },
+  { id: 'Jua', label: '주아체 (Jua - 둥글둥글 귀여운 볼드)', font: '"Jua", sans-serif' },
+  { id: 'Dongle', label: '동글체 (Dongle - 아기자기 동글동글)', font: '"Dongle", sans-serif' },
+  { id: 'Do Hyeon', label: '도현체 (Do Hyeon - 둥근 고딕 헤드라인)', font: '"Do Hyeon", sans-serif' },
+  { id: 'Gaegu', label: '개구체 (Gaegu - 통통 튀는 귀여운 손글씨)', font: '"Gaegu", cursive' },
+  { id: 'Gamja Flower', label: '감자꽃체 (Gamja Flower - 둥글둥글 감성)', font: '"Gamja Flower", cursive' },
+  { id: 'Hi Melody', label: '하이멜로디 (Hi Melody - 아기자기 귀여운 손글씨)', font: '"Hi Melody", cursive' },
+  { id: 'Black Han Sans', label: '검은고딕 (Black Han Sans - 강렬한 볼드 헤드라인)', font: '"Black Han Sans", sans-serif' },
+  { id: 'Gowun Dodum', label: '고운 돋움 (Gowun Dodum - 단정하고 부드러운 고딕)', font: '"Gowun Dodum", sans-serif' },
+  { id: 'Gowun Batang', label: '고운 바탕 (Gowun Batang - 감성 에세이 명조)', font: '"Gowun Batang", serif' },
+  { id: 'Nanum Pen Script', label: '나눔손글씨 (Nanum Pen Script - 친근한 손글씨)', font: '"Nanum Pen Script", cursive' },
+  { id: 'Pretendard', label: '프리텐다드 (Pretendard - 모던 깔끔 산세리프)', font: 'Pretendard, -apple-system, sans-serif' },
+  { id: 'Noto Sans KR', label: '노토산스 (Noto Sans KR - 정통 표준 고딕)', font: '"Noto Sans KR", sans-serif' },
 ];
 
 interface StylePreset {
@@ -441,6 +447,228 @@ const STYLE_PRESETS: StylePreset[] = [
       },
     ],
   },
+  {
+    id: 'cute-jua',
+    name: '둥글둥글 주아체 (귀여운 볼드)',
+    fontBadge: '주아체',
+    description: '동글동글 통통 튀는 사랑스럽고 귀여운 분위기',
+    texts: (_ratio, w, h) => [
+      {
+        id: 't-cat',
+        text: '💖 오늘의 꿀정보',
+        x: Math.round(w / 2),
+        y: Math.round(h * 0.33),
+        fontSize: Math.round(w * 0.046),
+        baseFontSize: Math.round(1080 * 0.046),
+        fontFamily: '"Jua", sans-serif',
+        fontWeight: 'normal',
+        color: '#FFFFFF',
+        align: 'center',
+        hasStroke: false,
+        strokeColor: '#000000',
+        strokeWidth: 0,
+        hasShadow: true,
+        shadowColor: 'rgba(0,0,0,0.3)',
+        shadowBlur: 8,
+        hasBadgeBg: true,
+        badgeBgColor: '#EC4899',
+        badgePadding: 16,
+        badgeRadius: 20,
+      },
+      {
+        id: 't-main',
+        text: '놓치면 아쉬운!\n둥글둥글 꿀팁 대방출',
+        x: Math.round(w / 2),
+        y: Math.round(h * 0.52),
+        fontSize: Math.round(w * 0.082),
+        baseFontSize: Math.round(1080 * 0.082),
+        fontFamily: '"Jua", sans-serif',
+        fontWeight: 'normal',
+        color: '#FFFFFF',
+        align: 'center',
+        hasStroke: true,
+        strokeColor: '#831843',
+        strokeWidth: 6,
+        hasShadow: true,
+        shadowColor: 'rgba(0,0,0,0.6)',
+        shadowBlur: 12,
+        hasBadgeBg: false,
+        badgeBgColor: 'rgba(0,0,0,0.5)',
+        badgePadding: 12,
+        badgeRadius: 10,
+      },
+      {
+        id: 't-sub',
+        text: '초보자도 쉽게 따라할 수 있는 1분 핵심 정리 ✨',
+        x: Math.round(w / 2),
+        y: Math.round(h * 0.72),
+        fontSize: Math.round(w * 0.042),
+        baseFontSize: Math.round(1080 * 0.042),
+        fontFamily: '"Jua", sans-serif',
+        fontWeight: 'normal',
+        color: '#FEF08A',
+        align: 'center',
+        hasStroke: true,
+        strokeColor: '#000000',
+        strokeWidth: 3,
+        hasShadow: true,
+        shadowColor: 'rgba(0,0,0,0.8)',
+        shadowBlur: 8,
+        hasBadgeBg: false,
+        badgeBgColor: 'rgba(0,0,0,0.5)',
+        badgePadding: 10,
+        badgeRadius: 8,
+      },
+    ],
+  },
+  {
+    id: 'cute-dongle',
+    name: '동글동글 동글체 (아기자기 감성)',
+    fontBadge: '동글체',
+    description: '극강의 동글동글함과 아기자기한 다이어리/일상 감성',
+    texts: (_ratio, w, h) => [
+      {
+        id: 't-cat',
+        text: '🐰 일상 다이어리',
+        x: Math.round(w / 2),
+        y: Math.round(h * 0.32),
+        fontSize: Math.round(w * 0.06),
+        baseFontSize: Math.round(1080 * 0.06),
+        fontFamily: '"Dongle", sans-serif',
+        fontWeight: 'bold',
+        color: '#18181B',
+        align: 'center',
+        hasStroke: false,
+        strokeColor: '#000000',
+        strokeWidth: 0,
+        hasShadow: false,
+        shadowColor: 'rgba(0,0,0,0.4)',
+        shadowBlur: 6,
+        hasBadgeBg: true,
+        badgeBgColor: '#FEF08A',
+        badgePadding: 20,
+        badgeRadius: 24,
+      },
+      {
+        id: 't-main',
+        text: '동글동글 귀여운\n행복 가득한 하루 기록',
+        x: Math.round(w / 2),
+        y: Math.round(h * 0.52),
+        fontSize: Math.round(w * 0.12),
+        baseFontSize: Math.round(1080 * 0.12),
+        fontFamily: '"Dongle", sans-serif',
+        fontWeight: 'bold',
+        color: '#FFFFFF',
+        align: 'center',
+        hasStroke: true,
+        strokeColor: '#18181B',
+        strokeWidth: 6,
+        hasShadow: true,
+        shadowColor: 'rgba(0,0,0,0.7)',
+        shadowBlur: 12,
+        hasBadgeBg: false,
+        badgeBgColor: 'rgba(0,0,0,0.5)',
+        badgePadding: 12,
+        badgeRadius: 10,
+      },
+      {
+        id: 't-sub',
+        text: '소소하지만 확실한 나만의 힐링 모먼트 🌿',
+        x: Math.round(w / 2),
+        y: Math.round(h * 0.73),
+        fontSize: Math.round(w * 0.065),
+        baseFontSize: Math.round(1080 * 0.065),
+        fontFamily: '"Dongle", sans-serif',
+        fontWeight: 'normal',
+        color: '#BAE6FD',
+        align: 'center',
+        hasStroke: true,
+        strokeColor: '#000000',
+        strokeWidth: 3,
+        hasShadow: true,
+        shadowColor: 'rgba(0,0,0,0.8)',
+        shadowBlur: 8,
+        hasBadgeBg: false,
+        badgeBgColor: 'rgba(0,0,0,0.5)',
+        badgePadding: 10,
+        badgeRadius: 8,
+      },
+    ],
+  },
+  {
+    id: 'cute-gamja',
+    name: '감자꽃 손글씨 (포근한 동화풍)',
+    fontBadge: '감자꽃체',
+    description: '따뜻하고 동화 같은 손글씨로 편안한 감성 전달',
+    texts: (_ratio, w, h) => [
+      {
+        id: 't-cat',
+        text: '🧸 소소한 리뷰',
+        x: Math.round(w / 2),
+        y: Math.round(h * 0.34),
+        fontSize: Math.round(w * 0.046),
+        baseFontSize: Math.round(1080 * 0.046),
+        fontFamily: '"Gamja Flower", cursive',
+        fontWeight: 'normal',
+        color: '#FFFFFF',
+        align: 'center',
+        hasStroke: false,
+        strokeColor: '#000000',
+        strokeWidth: 0,
+        hasShadow: true,
+        shadowColor: 'rgba(0,0,0,0.4)',
+        shadowBlur: 6,
+        hasBadgeBg: true,
+        badgeBgColor: '#10B981',
+        badgePadding: 16,
+        badgeRadius: 18,
+      },
+      {
+        id: 't-main',
+        text: '포근하고 따뜻한\n우리 집 감성 홈카페',
+        x: Math.round(w / 2),
+        y: Math.round(h * 0.53),
+        fontSize: Math.round(w * 0.082),
+        baseFontSize: Math.round(1080 * 0.082),
+        fontFamily: '"Gamja Flower", cursive',
+        fontWeight: 'normal',
+        color: '#FFFFFF',
+        align: 'center',
+        hasStroke: true,
+        strokeColor: '#064E3B',
+        strokeWidth: 6,
+        hasShadow: true,
+        shadowColor: 'rgba(0,0,0,0.8)',
+        shadowBlur: 14,
+        hasBadgeBg: false,
+        badgeBgColor: 'rgba(0,0,0,0.5)',
+        badgePadding: 12,
+        badgeRadius: 10,
+      },
+      {
+        id: 't-sub',
+        text: '바쁜 일상 속 여유를 선물하는 소소한 힐링 ☕',
+        x: Math.round(w / 2),
+        y: Math.round(h * 0.72),
+        fontSize: Math.round(w * 0.044),
+        baseFontSize: Math.round(1080 * 0.044),
+        fontFamily: '"Gamja Flower", cursive',
+        fontWeight: 'normal',
+        color: '#FEF3C7',
+        align: 'center',
+        hasStroke: true,
+        strokeColor: '#000000',
+        strokeWidth: 3,
+        hasShadow: true,
+        shadowColor: 'rgba(0,0,0,0.8)',
+        shadowBlur: 8,
+        hasBadgeBg: false,
+        badgeBgColor: 'rgba(0,0,0,0.5)',
+        badgePadding: 10,
+        badgeRadius: 8,
+      },
+    ],
+  },
 ];
 
 export function ThumbnailMaker() {
@@ -529,22 +757,21 @@ export function ThumbnailMaker() {
     }
   }, [savedBgImage]);
 
-  // Upload background image & persist
-  const handleUploadBgImage = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      if (result) {
-        setSavedBgImage(result);
-        setBgType('image');
-        try {
-          localStorage.setItem(STORAGE_BG_IMAGE_KEY, result);
-        } catch (err) {
-          console.warn('Storage quota exceeded or error saving image to localStorage', err);
-        }
+  // Upload background image & persist (guaranteeing 100% metadata/EXIF stripping)
+  const handleUploadBgImage = async (file: File) => {
+    try {
+      const stripped = await stripImageMetadata(file);
+      const result = stripped.cleanDataUrl;
+      setSavedBgImage(result);
+      setBgType('image');
+      try {
+        localStorage.setItem(STORAGE_BG_IMAGE_KEY, result);
+      } catch (err) {
+        console.warn('Storage quota exceeded or error saving image to localStorage', err);
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Failed to strip metadata from thumbnail background:', err);
+    }
   };
 
   // Remove saved background image
@@ -1360,7 +1587,7 @@ export function ThumbnailMaker() {
                       클릭하여 배경 사진 업로드
                     </span>
                     <span className="text-[10px] text-zinc-400 text-center">
-                      설정된 사진은 변경/삭제하기 전까지 로컬에 자동 보관됩니다
+                      설정된 사진은 로컬에 자동 보관되며, GPS/카메라 메타정보(EXIF)는 100% 자동 소거됩니다
                     </span>
                     <input
                       type="file"

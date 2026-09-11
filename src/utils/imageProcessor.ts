@@ -59,6 +59,55 @@ export function getMimeType(format: OutputFormat): string {
 }
 
 /**
+ * Strips all EXIF, GPS location coordinates, camera device info, and timestamp metadata.
+ * By redrawing onto HTML5 Canvas and re-encoding, all metadata chunks are 100% discarded.
+ */
+export async function stripImageMetadata(fileOrDataUrl: File | string): Promise<{
+  cleanDataUrl: string;
+  cleanBlob: Blob;
+  width: number;
+  height: number;
+}> {
+  let sourceUrl: string;
+  if (typeof fileOrDataUrl === 'string') {
+    sourceUrl = fileOrDataUrl;
+  } else {
+    sourceUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(fileOrDataUrl);
+    });
+  }
+
+  const img = await loadImage(sourceUrl);
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Failed to get canvas context for metadata stripping');
+
+  // Draw pure pixels onto fresh canvas
+  ctx.drawImage(img, 0, 0);
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('Failed to convert canvas to blob'));
+        return;
+      }
+      const cleanDataUrl = URL.createObjectURL(blob);
+      resolve({
+        cleanDataUrl,
+        cleanBlob: blob,
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      });
+    }, 'image/png');
+  });
+}
+
+/**
  * High-quality multi-step downscaling to avoid blurriness / fuzziness when shrinking large images.
  * Keeps text edges razor sharp instead of muddying with single-step bilinear interpolation.
  */
