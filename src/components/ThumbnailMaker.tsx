@@ -710,6 +710,7 @@ export function ThumbnailMaker() {
   const [texts, setTexts] = useState<ThumbnailTextLayer[]>(() =>
     STYLE_PRESETS[0].texts('1:1', 1080, 1080)
   );
+  const [activePresetId, setActivePresetId] = useState<string | null>(STYLE_PRESETS[0].id);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const selectedText = texts.find((t) => t.id === selectedTextId) || null;
 
@@ -823,8 +824,12 @@ export function ThumbnailMaker() {
   const handleApplyPreset = (preset: StylePreset) => {
     const size = getCanvasSize(ratio);
     const newTexts = preset.texts(ratio, size.width, size.height);
+    setActivePresetId(preset.id);
     setTexts(newTexts);
     setSelectedTextId(null);
+
+    // 0ms Synchronous draw to canvas immediately with newTexts
+    renderCanvas(newTexts);
 
     // Preload all fonts used in the preset and re-render canvas immediately as soon as fonts are ready
     if (typeof document !== 'undefined' && 'fonts' in document) {
@@ -834,15 +839,43 @@ export function ThumbnailMaker() {
       });
 
       Promise.all(fontPromises).then(() => {
-        renderCanvas();
+        renderCanvas(newTexts);
       });
 
-      // Quick fallback re-renders for network font fetch latency so users never have to click text
-      requestAnimationFrame(() => renderCanvas());
-      setTimeout(() => renderCanvas(), 60);
-      setTimeout(() => renderCanvas(), 180);
-      setTimeout(() => renderCanvas(), 400);
+      // Quick fallback re-renders for network font fetch latency
+      requestAnimationFrame(() => renderCanvas(newTexts));
+      setTimeout(() => renderCanvas(newTexts), 40);
+      setTimeout(() => renderCanvas(newTexts), 120);
+      setTimeout(() => renderCanvas(newTexts), 300);
     }
+  };
+
+  // Reset all thumbnail configurations back to clean defaults
+  const handleResetAll = () => {
+    const defaultRatio: ThumbnailRatio = '1:1';
+    const defaultSize = getCanvasSize(defaultRatio);
+    const defaultTexts = STYLE_PRESETS[0].texts(defaultRatio, defaultSize.width, defaultSize.height);
+
+    setRatio(defaultRatio);
+    setBgType('gradient');
+    setGradientId('modern-dark');
+    setSolidColor('#03C75A');
+    setDimOpacity(0.35);
+    setTexts(defaultTexts);
+    setSelectedTextId(null);
+    setActivePresetId(STYLE_PRESETS[0].id);
+
+    renderCanvas({
+      ratio: defaultRatio,
+      bgType: 'gradient',
+      gradientId: 'modern-dark',
+      solidColor: '#03C75A',
+      dimOpacity: 0.35,
+      texts: defaultTexts,
+    });
+
+    setTemplateSuccessNotice('썸네일 설정과 텍스트가 초기 기본값으로 깨끗하게 리셋되었습니다.');
+    setTimeout(() => setTemplateSuccessNotice(null), 3000);
   };
 
   // Add new text layer
@@ -987,18 +1020,43 @@ export function ThumbnailMaker() {
   // -------------------------------------------------------------
   // Canvas Rendering Logic with Interactive Selection Bounding Box & Snap Lines
   // -------------------------------------------------------------
-  const renderCanvas = useCallback(() => {
+  const renderCanvas = useCallback((overrides?: ThumbnailTextLayer[] | {
+    texts?: ThumbnailTextLayer[];
+    bgType?: ThumbnailBgType;
+    gradientId?: string;
+    solidColor?: string;
+    dimOpacity?: number;
+    ratio?: ThumbnailRatio;
+  }) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const { width, height } = canvasDims;
+    let targetTexts = texts;
+    let targetBgType = bgType;
+    let targetGradientId = gradientId;
+    let targetSolidColor = solidColor;
+    let targetDimOpacity = dimOpacity;
+    let targetDims = canvasDims;
+
+    if (Array.isArray(overrides)) {
+      targetTexts = overrides;
+    } else if (overrides) {
+      if (overrides.texts) targetTexts = overrides.texts;
+      if (overrides.bgType) targetBgType = overrides.bgType;
+      if (overrides.gradientId) targetGradientId = overrides.gradientId;
+      if (overrides.solidColor) targetSolidColor = overrides.solidColor;
+      if (overrides.dimOpacity !== undefined) targetDimOpacity = overrides.dimOpacity;
+      if (overrides.ratio) targetDims = getCanvasSize(overrides.ratio);
+    }
+
+    const { width, height } = targetDims;
     canvas.width = width;
     canvas.height = height;
 
     // 1. Draw Background
-    if (bgType === 'image' && bgImgElementRef.current) {
+    if (targetBgType === 'image' && bgImgElementRef.current) {
       const img = bgImgElementRef.current;
       const imgRatio = img.naturalWidth / img.naturalHeight;
       const canvasRatio = width / height;
@@ -1017,15 +1075,15 @@ export function ThumbnailMaker() {
 
       ctx.drawImage(img, drawX, drawY, drawW, drawH);
 
-      if (dimOpacity > 0) {
-        ctx.fillStyle = `rgba(0, 0, 0, ${dimOpacity})`;
+      if (targetDimOpacity > 0) {
+        ctx.fillStyle = `rgba(0, 0, 0, ${targetDimOpacity})`;
         ctx.fillRect(0, 0, width, height);
       }
-    } else if (bgType === 'solid') {
-      ctx.fillStyle = solidColor;
+    } else if (targetBgType === 'solid') {
+      ctx.fillStyle = targetSolidColor;
       ctx.fillRect(0, 0, width, height);
     } else {
-      const preset = GRADIENT_PRESETS.find((g) => g.id === gradientId) || GRADIENT_PRESETS[0];
+      const preset = GRADIENT_PRESETS.find((g) => g.id === targetGradientId) || GRADIENT_PRESETS[0];
       const grad = ctx.createLinearGradient(0, 0, width, height);
       grad.addColorStop(0, preset.colors[0]);
       grad.addColorStop(1, preset.colors[1]);
@@ -1034,7 +1092,7 @@ export function ThumbnailMaker() {
     }
 
     // 2. Draw Text Layers
-    texts.forEach((layer) => {
+    targetTexts.forEach((layer) => {
       if (!layer.text.trim()) return;
 
       ctx.save();
@@ -1438,27 +1496,39 @@ export function ThumbnailMaker() {
           </div>
         </div>
 
-        {/* Ratio Selector Buttons */}
-        <div className="flex items-center gap-1.5 bg-zinc-200/60 p-1 rounded-xl">
-          {[
-            { id: '1:1' as const, label: '정사각형 (1:1)', sub: '1080×1080' },
-            { id: '16:9' as const, label: '와이드 (16:9)', sub: '1280×720' },
-            { id: '4:3' as const, label: '클래식 (4:3)', sub: '1200×900' },
-          ].map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => handleRatioChange(r.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                ratio === r.id
-                  ? 'bg-white text-zinc-900 shadow-xs'
-                  : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100/60'
-              }`}
-            >
-              <div>{r.label}</div>
-              <div className="text-[10px] font-mono text-zinc-400 font-normal">{r.sub}</div>
-            </button>
-          ))}
+        {/* Ratio Selector Buttons & Reset Button */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 bg-zinc-200/60 p-1 rounded-xl">
+            {[
+              { id: '1:1' as const, label: '정사각형 (1:1)', sub: '1080×1080' },
+              { id: '16:9' as const, label: '와이드 (16:9)', sub: '1280×720' },
+              { id: '4:3' as const, label: '클래식 (4:3)', sub: '1200×900' },
+            ].map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => handleRatioChange(r.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  ratio === r.id
+                    ? 'bg-white text-zinc-900 shadow-xs'
+                    : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100/60'
+                }`}
+              >
+                <div>{r.label}</div>
+                <div className="text-[10px] font-mono text-zinc-400 font-normal">{r.sub}</div>
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleResetAll}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-300 bg-white hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 text-zinc-700 text-xs font-semibold shadow-2xs transition-all active:scale-95 cursor-pointer"
+            title="모든 설정을 초기 기본 상태로 되돌립니다"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-zinc-500 hover:text-rose-500" />
+            <span>설정 초기화</span>
+          </button>
         </div>
       </div>
 
@@ -1490,26 +1560,54 @@ export function ThumbnailMaker() {
             )}
           </div>
 
-          {/* Quick presets row with font badges */}
+          {/* Quick presets row with font badges & Quick Reset */}
           <div className="mt-4 flex items-center flex-wrap justify-center gap-2 max-w-3xl">
             <span className="text-xs font-bold text-zinc-600 mr-1 flex items-center gap-1">
               <Layers className="w-3.5 h-3.5 text-zinc-500" />
               폰트 느낌별 프리셋:
             </span>
-            {STYLE_PRESETS.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => handleApplyPreset(p)}
-                className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-zinc-50 border border-zinc-200 text-xs font-semibold text-zinc-700 shadow-2xs transition-all flex items-center gap-1.5"
-                title={p.description}
-              >
-                <span>{p.name}</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-zinc-100 text-zinc-500 font-normal">
-                  {p.fontBadge}
-                </span>
-              </button>
-            ))}
+            {STYLE_PRESETS.map((p) => {
+              const isSelected = activePresetId === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onMouseDown={(e) => {
+                    // Prevent blur event from active input from canceling the single click!
+                    e.preventDefault();
+                    handleApplyPreset(p);
+                  }}
+                  onClick={() => handleApplyPreset(p)}
+                  className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold shadow-2xs transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer ${
+                    isSelected
+                      ? 'bg-zinc-900 text-white border-zinc-900 ring-2 ring-zinc-900/30 shadow-xs'
+                      : 'bg-white hover:bg-zinc-50 border-zinc-200 text-zinc-700'
+                  }`}
+                  title={p.description}
+                >
+                  <span>{p.name}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded font-normal ${
+                      isSelected
+                        ? 'bg-zinc-800 text-zinc-200'
+                        : 'bg-zinc-100 text-zinc-500'
+                    }`}
+                  >
+                    {p.fontBadge}
+                  </span>
+                </button>
+              );
+            })}
+            <div className="h-4 w-[1px] bg-zinc-300 mx-0.5 hidden sm:block" />
+            <button
+              type="button"
+              onClick={handleResetAll}
+              className="px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 border border-zinc-200 text-xs font-semibold text-zinc-600 shadow-2xs transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+              title="썸네일 텍스트와 설정을 초기 기본값으로 리셋"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>초기화</span>
+            </button>
           </div>
         </div>
 
