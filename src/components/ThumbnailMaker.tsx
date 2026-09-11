@@ -819,11 +819,30 @@ export function ThumbnailMaker() {
     );
   };
 
-  // Apply style preset
+  // Apply style preset (with automatic web font loading & instant canvas re-render)
   const handleApplyPreset = (preset: StylePreset) => {
     const size = getCanvasSize(ratio);
-    setTexts(preset.texts(ratio, size.width, size.height));
+    const newTexts = preset.texts(ratio, size.width, size.height);
+    setTexts(newTexts);
     setSelectedTextId(null);
+
+    // Preload all fonts used in the preset and re-render canvas immediately as soon as fonts are ready
+    if (typeof document !== 'undefined' && 'fonts' in document) {
+      const fontPromises = newTexts.map((t) => {
+        const family = t.fontFamily.split(',')[0].trim().replace(/['"]/g, '');
+        return document.fonts.load(`${t.fontWeight || 'normal'} ${t.fontSize}px "${family}"`).catch(() => {});
+      });
+
+      Promise.all(fontPromises).then(() => {
+        renderCanvas();
+      });
+
+      // Quick fallback re-renders for network font fetch latency so users never have to click text
+      requestAnimationFrame(() => renderCanvas());
+      setTimeout(() => renderCanvas(), 60);
+      setTimeout(() => renderCanvas(), 180);
+      setTimeout(() => renderCanvas(), 400);
+    }
   };
 
   // Add new text layer
@@ -875,6 +894,14 @@ export function ThumbnailMaker() {
         return t;
       })
     );
+
+    if (patch.fontFamily && typeof document !== 'undefined' && 'fonts' in document) {
+      const family = patch.fontFamily.split(',')[0].trim().replace(/['"]/g, '');
+      document.fonts.load(`32px "${family}"`).then(() => {
+        renderCanvas();
+      }).catch(() => {});
+      setTimeout(() => renderCanvas(), 80);
+    }
   };
 
   // Delete selected text layer
@@ -933,6 +960,18 @@ export function ThumbnailMaker() {
     setDimOpacity(tpl.dimOpacity);
     setTexts(JSON.parse(JSON.stringify(tpl.texts)));
     setSelectedTextId(null);
+
+    if (typeof document !== 'undefined' && 'fonts' in document) {
+      const fontPromises = tpl.texts.map((t) => {
+        const family = t.fontFamily.split(',')[0].trim().replace(/['"]/g, '');
+        return document.fonts.load(`${t.fontWeight || 'normal'} ${t.fontSize}px "${family}"`).catch(() => {});
+      });
+      Promise.all(fontPromises).then(() => {
+        renderCanvas();
+      });
+      setTimeout(() => renderCanvas(), 80);
+      setTimeout(() => renderCanvas(), 250);
+    }
   };
 
   const handleDeleteTemplate = (id: string) => {
@@ -1178,8 +1217,41 @@ export function ThumbnailMaker() {
     }
   }, [canvasDims, bgType, gradientId, solidColor, dimOpacity, texts, selectedTextId, isDragging, isSnappingX, isSnappingY, isExporting]);
 
+  // Preload all custom Korean fonts on mount so canvas renders them instantly without clicking
+  useEffect(() => {
+    if (typeof document !== 'undefined' && 'fonts' in document) {
+      const fontsToWarmUp = [
+        'normal 32px "Jua"',
+        'normal 32px "Dongle"',
+        'bold 32px "Dongle"',
+        'normal 32px "Gamja Flower"',
+        'normal 32px "Do Hyeon"',
+        'bold 32px "Gaegu"',
+        'normal 32px "Hi Melody"',
+        'normal 32px "Black Han Sans"',
+        'normal 32px "Gowun Dodum"',
+        'normal 32px "Gowun Batang"',
+        'normal 32px "Nanum Pen Script"',
+        'normal 32px Pretendard',
+      ];
+
+      Promise.all(fontsToWarmUp.map((f) => document.fonts.load(f).catch(() => {}))).then(() => {
+        renderCanvas();
+      });
+
+      document.fonts.ready.then(() => {
+        renderCanvas();
+      });
+    }
+  }, [renderCanvas]);
+
   useEffect(() => {
     renderCanvas();
+    if (typeof document !== 'undefined' && 'fonts' in document) {
+      document.fonts.ready.then(() => {
+        renderCanvas();
+      });
+    }
   }, [renderCanvas]);
 
   // -------------------------------------------------------------
@@ -1959,6 +2031,23 @@ export function ThumbnailMaker() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Hidden Font Preloader to force browser to immediately download all woff2 font files */}
+      <div
+        aria-hidden="true"
+        className="fixed -top-[9999px] -left-[9999px] opacity-0 pointer-events-none select-none overflow-hidden h-0 w-0"
+      >
+        <span style={{ fontFamily: '"Jua", sans-serif' }}>주아체 폰트 로드 123 ABC</span>
+        <span style={{ fontFamily: '"Dongle", sans-serif' }}>동글체 폰트 로드 123 ABC</span>
+        <span style={{ fontFamily: '"Gamja Flower", cursive' }}>감자꽃체 폰트 로드 123 ABC</span>
+        <span style={{ fontFamily: '"Do Hyeon", sans-serif' }}>도현체 폰트 로드 123 ABC</span>
+        <span style={{ fontFamily: '"Gaegu", cursive' }}>개구체 폰트 로드 123 ABC</span>
+        <span style={{ fontFamily: '"Hi Melody", cursive' }}>하이멜로디 폰트 로드 123 ABC</span>
+        <span style={{ fontFamily: '"Black Han Sans", sans-serif' }}>검은고딕 폰트 로드 123 ABC</span>
+        <span style={{ fontFamily: '"Gowun Dodum", sans-serif' }}>고운돋움 폰트 로드 123 ABC</span>
+        <span style={{ fontFamily: '"Gowun Batang", serif' }}>고운바탕 폰트 로드 123 ABC</span>
+        <span style={{ fontFamily: '"Nanum Pen Script", cursive' }}>나눔손글씨 폰트 로드 123 ABC</span>
       </div>
     </div>
   );
