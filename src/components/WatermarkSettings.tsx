@@ -202,7 +202,7 @@ export function WatermarkSettings({
                 />
 
                 {/* Quick suggestions */}
-                <div className="flex items-center gap-1.5 shrink-0 overflow-x-auto no-scrollbar">
+                <div className="flex items-center flex-wrap gap-1.5 shrink-0">
                   {[
                     '© 부업하는 도도파파',
                     'blog.naver.com/lonnie79',
@@ -217,7 +217,7 @@ export function WatermarkSettings({
                           text: preset,
                         })
                       }
-                      className="px-2 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11px] font-medium whitespace-nowrap transition-colors"
+                      className="px-2 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11px] font-medium transition-colors cursor-pointer"
                     >
                       {preset}
                     </button>

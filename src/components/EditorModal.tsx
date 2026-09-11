@@ -943,77 +943,77 @@ export function EditorModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
-      <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-[98vw] max-w-[1440px] h-[95vh] max-h-[96vh] flex flex-col shadow-2xl overflow-hidden text-white">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-0 sm:p-3 md:p-4 animate-in fade-in duration-200">
+      <div className="bg-zinc-950 border-0 sm:border sm:border-zinc-800 rounded-none sm:rounded-2xl w-full sm:w-[98vw] max-w-[1440px] h-[100dvh] sm:h-[95vh] sm:max-h-[96vh] flex flex-col shadow-2xl overflow-hidden text-white">
         {/* Top Header */}
-        <div className="h-14 px-4 border-b border-zinc-800 flex items-center justify-between gap-3 shrink-0 bg-zinc-900/90">
-          <div className="flex items-center gap-3">
-            <h3 className="font-bold text-sm sm:text-base flex items-center gap-2">
-              <span>스튜디오 이미지 에디터</span>
-              <span className="text-xs px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono">
-                {canvasDims.width} × {canvasDims.height} px
+        <div className="min-h-12 sm:h-14 px-2.5 sm:px-4 py-1.5 sm:py-0 border-b border-zinc-800 flex items-center justify-between gap-2 shrink-0 bg-zinc-900/90">
+          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+            <h3 className="font-bold text-xs sm:text-base flex items-center gap-1.5 shrink-0">
+              <span>이미지 에디터</span>
+              <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono">
+                {canvasDims.width}×{canvasDims.height}
               </span>
             </h3>
-            <span className="text-xs text-zinc-400 truncate max-w-[200px] hidden md:inline-block">
+            <span className="text-xs text-zinc-400 truncate max-w-[180px] hidden md:inline-block">
               {image.originalName}
             </span>
           </div>
 
           {/* Undo / Redo / Reset & Save */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center bg-zinc-800/80 rounded-xl p-1 border border-zinc-700 mr-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            <div className="flex items-center bg-zinc-800/80 rounded-lg sm:rounded-xl p-0.5 sm:p-1 border border-zinc-700">
               <button
                 type="button"
                 onClick={undo}
                 disabled={historyIndex <= 0}
-                className="p-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                className="p-1 sm:p-1.5 rounded text-zinc-300 hover:text-white hover:bg-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                 title="되돌리기 (Undo, Ctrl+Z)"
               >
-                <Undo2 className="w-4 h-4" />
+                <Undo2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
               <button
                 type="button"
                 onClick={redo}
                 disabled={historyIndex >= history.length - 1}
-                className="p-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                className="p-1 sm:p-1.5 rounded text-zinc-300 hover:text-white hover:bg-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
                 title="다시 실행 (Redo, Ctrl+Shift+Z)"
               >
-                <Redo2 className="w-4 h-4" />
+                <Redo2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
-              <div className="w-[1px] h-4 bg-zinc-700 mx-1" />
+              <div className="w-[1px] h-3 sm:h-4 bg-zinc-700 mx-0.5" />
               <button
                 type="button"
                 onClick={resetToOriginal}
-                className="p-1.5 rounded-lg text-zinc-300 hover:text-rose-400 hover:bg-zinc-700 transition-colors"
+                className="p-1 sm:p-1.5 rounded text-zinc-300 hover:text-rose-400 hover:bg-zinc-700 transition-colors"
                 title="원본 초기화 (Reset)"
               >
-                <RotateCcw className="w-4 h-4" />
+                <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </div>
 
             <button
               type="button"
               onClick={handleSaveAndClose}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white text-black hover:bg-zinc-200 font-bold text-xs sm:text-sm shadow-sm transition-all"
+              className="inline-flex items-center gap-1 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-white text-black hover:bg-zinc-200 font-bold text-xs sm:text-sm shadow-sm transition-all shrink-0 cursor-pointer"
             >
-              <Check className="w-4 h-4 text-emerald-600" />
+              <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
               <span>편집 완료</span>
             </button>
 
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors shrink-0"
               title="닫기"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
 
         {/* Primary Tool Selector Bar */}
-        <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800">
+        <div className="bg-zinc-900 border-b border-zinc-800 px-2 sm:px-4 py-1.5 sm:py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 overflow-x-auto no-scrollbar w-full sm:w-auto shrink-0">
             {[
               { id: 'select', label: '선택·미리보기', icon: MousePointer },
               { id: 'crop', label: '자르기', icon: Crop },
@@ -1045,13 +1045,13 @@ export function EditorModal({
                       setSelectedType('text');
                     }
                   }}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  className={`inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
                     isActive
                       ? 'bg-zinc-100 text-black shadow-sm'
                       : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5" />
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
                   <span>{tool.label}</span>
                 </button>
               );
@@ -1059,7 +1059,7 @@ export function EditorModal({
           </div>
 
           {/* Sub-toolbar Controls per Active Tool */}
-          <div className="flex items-center flex-wrap gap-2 text-xs">
+          <div className="flex items-center flex-wrap gap-1.5 sm:gap-2 text-xs overflow-x-auto no-scrollbar w-full sm:w-auto py-0.5">
             {/* 0. Select / Preview Mode */}
             {activeTool === 'select' && (
               <div className="flex items-center gap-2 text-zinc-300 py-0.5">
@@ -1594,7 +1594,7 @@ export function EditorModal({
               setEditingInlineId(null);
             }
           }}
-          className="flex-1 bg-zinc-950/90 overflow-auto p-2 sm:p-4 flex items-center justify-center min-h-[360px] relative select-none w-full h-full"
+          className="flex-1 bg-zinc-950/90 overflow-auto p-1.5 sm:p-4 flex items-center justify-center min-h-[220px] relative select-none w-full h-full"
         >
           <div className="relative inline-block shadow-2xl border border-zinc-800/80 rounded-md overflow-hidden max-w-full max-h-full">
             {/* Base HTML5 Canvas */}
@@ -1603,7 +1603,7 @@ export function EditorModal({
               onMouseDown={handleCanvasMouseDown}
               onMouseMove={handleCanvasMouseMove}
               onMouseUp={handleCanvasMouseUp}
-              className={`block max-h-[74vh] max-w-full w-auto h-auto object-contain mx-auto ${
+              className={`block max-h-[60vh] sm:max-h-[74vh] max-w-full w-auto h-auto object-contain mx-auto ${
                 activeTool === 'crop' || activeTool === 'mosaic'
                   ? 'cursor-crosshair'
                   : 'cursor-default'
@@ -2157,23 +2157,23 @@ export function EditorModal({
         </div>
 
         {/* Bottom Hint Footer */}
-        <div className="h-10 px-4 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between text-xs text-zinc-400 shrink-0">
-          <div className="flex items-center gap-3">
-            <span>
-              {activeTool === 'crop' && '💡 자르고 싶은 영역을 드래그한 후 [자르기 적용]을 누르세요.'}
+        <div className="min-h-8 sm:h-9 px-3 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between text-[11px] text-zinc-400 shrink-0">
+          <div className="flex items-center gap-2 truncate">
+            <span className="truncate">
+              {activeTool === 'crop' && '💡 자르고 싶은 영역 드래그 후 [자르기 적용] 클릭'}
               {activeTool === 'arrow' &&
-                '💡 화살표를 클릭하면 바로 삭제 버튼이 나타나며, 꼬리 길이와 각도 버튼 또는 앵커로 조절할 수 있습니다.'}
+                '💡 화살표 클릭 시 삭제 버튼 표시 · 길이/각도 조절 가능'}
               {activeTool === 'callout' &&
-                '💡 말풍선을 클릭하면 삭제 및 글자 수정 버튼이 표시되며, 더블클릭하여 캔버스에서 직접 글자를 수정할 수 있습니다.'}
+                '💡 말풍선 클릭 시 삭제/수정 · 더블클릭으로 텍스트 변경'}
               {activeTool === 'text' &&
-                '💡 텍스트를 클릭하면 삭제 및 수정 버튼이 표시되며, 더블클릭하여 캔버스에서 바로 글자를 수정할 수 있습니다.'}
-              {activeTool === 'mosaic' && '💡 가리고 싶은 영역을 드래그하면 모자이크가 즉시 적용됩니다.'}
+                '💡 텍스트 클릭 시 삭제/수정 · 더블클릭으로 텍스트 변경'}
+              {activeTool === 'mosaic' && '💡 가리고 싶은 영역 드래그 시 모자이크 즉시 적용'}
             </span>
           </div>
-          <div className="flex items-center gap-3 text-zinc-500">
-            <span className="hidden sm:inline">실행 취소: Ctrl+Z</span>
+          <div className="flex items-center gap-2 text-zinc-500 shrink-0">
+            <span className="hidden md:inline">실행 취소: Ctrl+Z</span>
             <span>
-              요소: 화살표 {arrows.length}개 · 말풍선 {callouts.length}개 · 텍스트 {texts.length}개
+              요소 {arrows.length + callouts.length + texts.length}개
             </span>
           </div>
         </div>
