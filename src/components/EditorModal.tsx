@@ -21,6 +21,8 @@ import {
   ArrowDownLeft,
   ArrowUpLeft,
   RotateCw,
+  MousePointer,
+  Eye,
 } from 'lucide-react';
 import {
   OptimizedImageItem,
@@ -34,6 +36,7 @@ import { loadImage } from '../utils/imageProcessor';
 import {
   getArrowGeometry,
   getCalloutGeometry,
+  getContrastTextColor,
   drawArrowOnCanvas,
   drawCalloutOnCanvas,
   drawTextOnCanvas,
@@ -533,6 +536,7 @@ export function EditorModal({
     const cx = targetCenterX ?? Math.round(canvasDims.width / 2);
     const cy = targetCenterY ?? Math.round(canvasDims.height / 2);
 
+    const contrastText = getContrastTextColor(defaultCalloutArrowColor);
     const newCallout: CalloutAnnotation = {
       id: Date.now().toString(),
       text: defaultCalloutText,
@@ -541,9 +545,9 @@ export function EditorModal({
       targetX: cx,
       targetY: cy + 30,
       fontSize: defaultCalloutFontSize,
-      textColor: '#111827',
-      bgColor: 'rgba(243, 244, 246, 0.88)', // translucent light gray
-      borderColor: 'rgba(209, 213, 219, 0.9)',
+      textColor: contrastText,
+      bgColor: defaultCalloutArrowColor,
+      borderColor: defaultCalloutArrowColor,
       arrowColor: defaultCalloutArrowColor,
       arrowWidth: 4,
     };
@@ -809,12 +813,43 @@ export function EditorModal({
     };
   }, [canvasDims]);
 
+  // Keyboard shortcut: Escape (Deselect / View Finished Screen), Delete / Backspace (Delete selected item)
+  useEffect(() => {
+    const handleKeyNav = (e: KeyboardEvent) => {
+      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+      const isInput = activeTag === 'input' || activeTag === 'textarea';
+
+      if (e.key === 'Escape') {
+        setSelectedId(null);
+        setSelectedType(null);
+        setEditingInlineId(null);
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput) {
+        if (selectedType === 'arrow' && selectedId) {
+          e.preventDefault();
+          deleteSelectedArrow();
+        } else if (selectedType === 'callout' && selectedId) {
+          e.preventDefault();
+          deleteSelectedCallout();
+        } else if (selectedType === 'text' && selectedId) {
+          e.preventDefault();
+          deleteSelectedText();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyNav);
+    return () => window.removeEventListener('keydown', handleKeyNav);
+  }, [selectedType, selectedId, deleteSelectedArrow, deleteSelectedCallout, deleteSelectedText]);
+
   // -------------------------------------------------------------
   // Canvas Mouse Events (Crop & Mosaic drawing, or clicking empty space)
   // -------------------------------------------------------------
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     setEditingInlineId(null);
     const { x, y } = getCanvasCoords(e);
+
+    // Clicking on empty canvas space clears selection to reveal the clean finished screen!
+    setSelectedId(null);
+    setSelectedType(null);
 
     if (activeTool === 'crop') {
       isDraggingCrop.current = true;
@@ -824,19 +859,6 @@ export function EditorModal({
       isDraggingCrop.current = true;
       cropStartPos.current = { x, y };
       setMosaicRect({ x, y, w: 0, h: 0 });
-    } else if (activeTool === 'arrow') {
-      // Clicking empty area with arrow tool adds new arrow at cursor
-      handleAddNewArrow(Math.round(x), Math.round(y));
-    } else if (activeTool === 'callout') {
-      // Clicking empty area with callout tool adds new callout at cursor
-      handleAddNewCallout(Math.round(x), Math.round(y));
-    } else if (activeTool === 'text') {
-      // Clicking empty area adds new text at cursor
-      handleAddNewText(Math.round(x), Math.round(y));
-    } else if (activeTool === 'select') {
-      // Unselect
-      setSelectedId(null);
-      setSelectedType(null);
     }
   };
 
@@ -921,8 +943,8 @@ export function EditorModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
-      <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-6xl max-h-[96vh] flex flex-col shadow-2xl overflow-hidden text-white">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+      <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-[98vw] max-w-[1440px] h-[95vh] max-h-[96vh] flex flex-col shadow-2xl overflow-hidden text-white">
         {/* Top Header */}
         <div className="h-14 px-4 border-b border-zinc-800 flex items-center justify-between gap-3 shrink-0 bg-zinc-900/90">
           <div className="flex items-center gap-3">
@@ -993,6 +1015,7 @@ export function EditorModal({
         <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800">
             {[
+              { id: 'select', label: '선택·미리보기', icon: MousePointer },
               { id: 'crop', label: '자르기', icon: Crop },
               { id: 'arrow', label: '굵은 화살표', icon: ArrowUpRight },
               { id: 'callout', label: '화살표 말풍선', icon: MessageSquare },
@@ -1007,7 +1030,11 @@ export function EditorModal({
                   type="button"
                   onClick={() => {
                     setActiveTool(tool.id as EditorTool);
-                    if (tool.id === 'arrow' && !activeArrow && arrows.length > 0) {
+                    if (tool.id === 'select') {
+                      setSelectedId(null);
+                      setSelectedType(null);
+                      setEditingInlineId(null);
+                    } else if (tool.id === 'arrow' && !activeArrow && arrows.length > 0) {
                       setSelectedId(arrows[arrows.length - 1].id);
                       setSelectedType('arrow');
                     } else if (tool.id === 'callout' && !activeCallout && callouts.length > 0) {
@@ -1033,6 +1060,19 @@ export function EditorModal({
 
           {/* Sub-toolbar Controls per Active Tool */}
           <div className="flex items-center flex-wrap gap-2 text-xs">
+            {/* 0. Select / Preview Mode */}
+            {activeTool === 'select' && (
+              <div className="flex items-center gap-2 text-zinc-300 py-0.5">
+                <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-800/60 px-2.5 py-1 rounded-lg">
+                  <Check className="w-3.5 h-3.5" />
+                  <span>완성 화면 미리보기 모드</span>
+                </span>
+                <span className="text-zinc-400 text-xs hidden sm:inline">
+                  (캔버스의 화살표나 말풍선, 텍스트를 클릭하면 언제든 선택하여 다시 수정할 수 있습니다)
+                </span>
+              </div>
+            )}
+
             {/* 1. Crop Options */}
             {activeTool === 'crop' && (
               <div className="flex items-center gap-2">
@@ -1078,6 +1118,21 @@ export function EditorModal({
                   <Plus className="w-3.5 h-3.5 text-emerald-400" />
                   <span>화살표 추가</span>
                 </button>
+
+                {activeArrow && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedId(null);
+                      setSelectedType(null);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium transition-colors border border-zinc-700 shadow-xs"
+                    title="선택을 해제하여 앵커 없는 완성된 모습을 확인합니다 (캔버스 빈 공간 클릭으로도 해제)"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-sky-400" />
+                    <span>완성 확인</span>
+                  </button>
+                )}
 
                 {/* Color Picker */}
                 <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
@@ -1221,6 +1276,22 @@ export function EditorModal({
                   <span>말풍선 추가</span>
                 </button>
 
+                {activeCallout && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedId(null);
+                      setSelectedType(null);
+                      setEditingInlineId(null);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium transition-colors border border-zinc-700 shadow-xs"
+                    title="선택을 해제하여 완성 화면을 확인합니다 (캔버스 빈 공간 클릭으로도 해제)"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-sky-400" />
+                    <span>완성 확인</span>
+                  </button>
+                )}
+
                 {/* Text input */}
                 <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
                   <input
@@ -1257,22 +1328,30 @@ export function EditorModal({
                   </span>
                 </div>
 
-                {/* Arrow Color Picker */}
+                {/* Arrow & Box Color Picker */}
                 <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
-                  <span className="text-zinc-400 text-[11px] ml-1 mr-0.5">화살표:</span>
+                  <span className="text-zinc-400 text-[11px] ml-1 mr-0.5">색상:</span>
                   {[
                     { label: '빨강', color: '#EF4444' },
-                    { label: '파랑', color: '#3B82F6' },
                     { label: '주황', color: '#F97316' },
+                    { label: '노랑', color: '#EAB308' },
                     { label: '초록', color: '#10B981' },
-                    { label: '차콜', color: '#374151' },
+                    { label: '파랑', color: '#3B82F6' },
+                    { label: '보라', color: '#8B5CF6' },
+                    { label: '차콜', color: '#1F2937' },
                   ].map((c) => (
                     <button
                       key={c.color}
                       type="button"
                       onClick={() => {
                         setDefaultCalloutArrowColor(c.color);
-                        updateSelectedCallout({ arrowColor: c.color });
+                        const contrast = getContrastTextColor(c.color);
+                        updateSelectedCallout({
+                          arrowColor: c.color,
+                          bgColor: c.color,
+                          borderColor: c.color,
+                          textColor: contrast,
+                        });
                       }}
                       className={`w-3.5 h-3.5 rounded-full border transition-transform ${
                         (activeCallout?.arrowColor || defaultCalloutArrowColor) === c.color
@@ -1280,7 +1359,7 @@ export function EditorModal({
                           : 'border-zinc-600 opacity-70 hover:opacity-100'
                       }`}
                       style={{ backgroundColor: c.color }}
-                      title={c.label}
+                      title={`${c.label} (자동 대비 글자색)`}
                     />
                   ))}
                 </div>
@@ -1335,6 +1414,22 @@ export function EditorModal({
                   <Plus className="w-3.5 h-3.5 text-emerald-400" />
                   <span>텍스트 추가</span>
                 </button>
+
+                {activeText && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedId(null);
+                      setSelectedType(null);
+                      setEditingInlineId(null);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium transition-colors border border-zinc-700 shadow-xs"
+                    title="선택을 해제하여 완성 화면을 확인합니다 (캔버스 빈 공간 클릭으로도 해제)"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-sky-400" />
+                    <span>완성 확인</span>
+                  </button>
+                )}
 
                 {/* Text String Input */}
                 <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
@@ -1492,19 +1587,24 @@ export function EditorModal({
         {/* Canvas Working Area with Interactive Annotation Overlays */}
         <div
           ref={containerRef}
-          className="flex-1 bg-zinc-950/90 overflow-auto p-4 flex items-center justify-center min-h-[360px] relative select-none"
+          onMouseDown={(e) => {
+            if (e.target === containerRef.current) {
+              setSelectedId(null);
+              setSelectedType(null);
+              setEditingInlineId(null);
+            }
+          }}
+          className="flex-1 bg-zinc-950/90 overflow-auto p-2 sm:p-4 flex items-center justify-center min-h-[360px] relative select-none w-full h-full"
         >
-          <div className="relative inline-block shadow-2xl border border-zinc-800/80 rounded-md overflow-hidden">
+          <div className="relative inline-block shadow-2xl border border-zinc-800/80 rounded-md overflow-hidden max-w-full max-h-full">
             {/* Base HTML5 Canvas */}
             <canvas
               ref={canvasRef}
               onMouseDown={handleCanvasMouseDown}
               onMouseMove={handleCanvasMouseMove}
               onMouseUp={handleCanvasMouseUp}
-              className={`block max-h-[70vh] max-w-[85vw] w-auto h-auto object-contain ${
+              className={`block max-h-[74vh] max-w-full w-auto h-auto object-contain mx-auto ${
                 activeTool === 'crop' || activeTool === 'mosaic'
-                  ? 'cursor-crosshair'
-                  : activeTool === 'arrow' || activeTool === 'callout' || activeTool === 'text'
                   ? 'cursor-crosshair'
                   : 'cursor-default'
               }`}
@@ -1851,18 +1951,18 @@ export function EditorModal({
                     isSelected ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-black/70' : ''
                   }`}
                 >
-                  {/* The Rounded Translucent Light-Gray Box */}
+                  {/* The Rounded Translucent Box Matching Arrow Color */}
                   <div
                     style={{
                       fontSize: `${Math.max(12, Math.round(callout.fontSize * canvasDisplayScale))}px`,
-                      color: callout.textColor,
-                      backgroundColor: callout.bgColor,
-                      borderColor: callout.borderColor,
-                      padding: `${Math.round(Math.max(8, callout.fontSize * canvasDisplayScale * 0.4))}px ${Math.round(Math.max(14, callout.fontSize * canvasDisplayScale * 0.7))}px`,
+                      color: callout.textColor || getContrastTextColor(callout.bgColor || callout.arrowColor),
+                      backgroundColor: callout.bgColor || callout.arrowColor,
+                      borderColor: callout.borderColor || 'rgba(255, 255, 255, 0.25)',
+                      padding: `${Math.round(Math.max(10, callout.fontSize * canvasDisplayScale * 0.48))}px ${Math.round(Math.max(18, callout.fontSize * canvasDisplayScale * 0.95))}px`,
                       backdropFilter: 'blur(8px)',
                       WebkitBackdropFilter: 'blur(8px)',
                     }}
-                    className="font-bold whitespace-nowrap rounded-xl shadow-lg border text-center flex items-center justify-center min-w-[70px] select-none"
+                    className="font-bold whitespace-nowrap rounded-xl shadow-xl border text-center flex items-center justify-center min-w-[80px] select-none"
                   >
                     {isInlineEditing ? (
                       <input

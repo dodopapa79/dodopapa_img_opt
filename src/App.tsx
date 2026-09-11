@@ -5,6 +5,7 @@ import { ImageUploadDropzone } from './components/ImageUploadDropzone';
 import { ImageList } from './components/ImageList';
 import { EditorModal } from './components/EditorModal';
 import { DownloadSummaryBar } from './components/DownloadSummaryBar';
+import { ThumbnailMaker } from './components/ThumbnailMaker';
 import { OptimizationSettings, OptimizedImageItem, AspectRatioOption, WatermarkConfig } from './types';
 import {
   processAndOptimizeImage,
@@ -46,10 +47,10 @@ function loadSavedWatermark(): WatermarkConfig {
 
 const DEFAULT_SETTINGS: OptimizationSettings = {
   platform: 'naver',
-  selectedRatio: '1:1',
+  selectedRatio: 'original',
   format: 'webp',
-  quality: 85,
-  maxWidthOption: '1200',
+  quality: 90,
+  maxWidthOption: '900',
   padSmallImages: true,
   padColor: '#F4F4F5',
   filenamePrefix: 'naver-blog',
@@ -60,6 +61,7 @@ const DEFAULT_SETTINGS: OptimizationSettings = {
 };
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState<'optimizer' | 'thumbnail'>('optimizer');
   const [settings, setSettings] = useState<OptimizationSettings>(DEFAULT_SETTINGS);
   const [images, setImages] = useState<OptimizedImageItem[]>([]);
   const [editingImage, setEditingImage] = useState<OptimizedImageItem | null>(null);
@@ -287,75 +289,122 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* Intro banner / Trust badges */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-500">
-          <div className="flex items-center gap-4 flex-wrap">
-            <span className="flex items-center gap-1.5 font-medium text-zinc-700">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              서버 전송 없는 100% 브라우저 로컬 변환 (개인정보 안전)
-            </span>
-            <span className="hidden sm:inline text-zinc-300">•</span>
-            <span className="flex items-center gap-1.5 font-medium text-zinc-700">
-              <Zap className="w-4 h-4 text-amber-500" />
-              네이버 스마트에디터 썸네일(1:1) & 본문 WebP 자동 최적화
-            </span>
-          </div>
+        {/* Main Tab Navigation */}
+        <div className="flex items-center gap-2 mb-6 border-b border-zinc-200 pb-3">
+          <button
+            type="button"
+            onClick={() => setActiveTab('optimizer')}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              activeTab === 'optimizer'
+                ? 'bg-black text-white shadow-sm'
+                : 'bg-white text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200'
+            }`}
+          >
+            <Zap className={`w-4 h-4 ${activeTab === 'optimizer' ? 'text-amber-400' : 'text-zinc-400'}`} />
+            <span>이미지 일괄 최적화 & 압축</span>
+            {images.length > 0 && (
+              <span className={`text-xs px-1.5 py-0.2 rounded-full ${
+                activeTab === 'optimizer' ? 'bg-zinc-800 text-amber-300' : 'bg-zinc-100 text-zinc-600'
+              }`}>
+                {images.length}
+              </span>
+            )}
+          </button>
 
-          <div className="text-zinc-400">
-            GitHub Pages 배포 호환 · 클라이언트 Canvas API 구동
-          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab('thumbnail')}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              activeTab === 'thumbnail'
+                ? 'bg-black text-white shadow-sm'
+                : 'bg-white text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200'
+            }`}
+          >
+            <Sparkles className={`w-4 h-4 ${activeTab === 'thumbnail' ? 'text-amber-400' : 'text-zinc-400'}`} />
+            <span>블로그 썸네일 제작기</span>
+            <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-emerald-500 text-white leading-none">
+              NEW
+            </span>
+          </button>
         </div>
 
-        {/* 1. Presets and Optimization Settings */}
-        <SettingsPanel
-          settings={settings}
-          onChange={handleSettingsChange}
-          onReset={handleResetSettings}
-          totalImages={images.length}
-        />
+        {activeTab === 'thumbnail' ? (
+          <ThumbnailMaker />
+        ) : (
+          <>
+            {/* Intro banner / Trust badges */}
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-500">
+              <div className="flex items-center gap-4 flex-wrap">
+                <span className="flex items-center gap-1.5 font-medium text-zinc-700">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  서버 전송 없는 100% 브라우저 로컬 변환 (개인정보 안전)
+                </span>
+                <span className="hidden sm:inline text-zinc-300">•</span>
+                <span className="flex items-center gap-1.5 font-medium text-zinc-700">
+                  <Zap className="w-4 h-4 text-amber-500" />
+                  네이버 스마트에디터 썸네일 & 본문 900px/WebP 최적화
+                </span>
+              </div>
 
-        {/* 2. Drag & Drop Upload Zone */}
-        <ImageUploadDropzone
-          onFilesSelected={handleFilesSelected}
-          onAddSampleImages={handleAddSampleImages}
-          isLoading={isProcessing}
-        />
-
-        {/* 3. Converted Images List with Before/After Comparison & Editor Entry */}
-        <ImageList
-          images={images}
-          onOpenEditor={(img) => setEditingImage(img)}
-          onRemoveImage={handleRemoveImage}
-          onDownloadSingle={handleDownloadSingle}
-        />
-
-        {/* Empty state guidance when no images are uploaded yet */}
-        {images.length === 0 && (
-          <div className="text-center py-12 px-4 rounded-2xl border border-dashed border-zinc-300 bg-white/60">
-            <div className="w-12 h-12 rounded-2xl bg-zinc-100 flex items-center justify-center mx-auto mb-3 text-zinc-400">
-              <ImageIcon className="w-6 h-6" />
+              <div className="text-zinc-400">
+                GitHub Pages 배포 호환 · 클라이언트 Canvas API 구동
+              </div>
             </div>
-            <h3 className="text-sm font-bold text-zinc-800 mb-1">
-              아직 등록된 이미지가 없습니다
-            </h3>
-            <p className="text-xs text-zinc-500 max-w-md mx-auto mb-4">
-              위 영역에 블로그에 올릴 사진들을 드래그하여 올려보세요.
-              자동으로 WebP 규격 변환, 용량 압축 및 네이버 최적화 비율이 계산됩니다.
-            </p>
-            <button
-              type="button"
-              onClick={handleAddSampleImages}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-black text-white text-xs font-semibold hover:bg-zinc-800 transition-all shadow-xs"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              샘플 이미지로 바로 테스트해보기
-            </button>
-          </div>
+
+            {/* 1. Presets and Optimization Settings */}
+            <SettingsPanel
+              settings={settings}
+              onChange={handleSettingsChange}
+              onReset={handleResetSettings}
+              totalImages={images.length}
+            />
+
+            {/* 2. Drag & Drop Upload Zone */}
+            <ImageUploadDropzone
+              onFilesSelected={handleFilesSelected}
+              onAddSampleImages={handleAddSampleImages}
+              isLoading={isProcessing}
+            />
+
+            {/* 3. Converted Images List with Before/After Comparison & Editor Entry */}
+            <ImageList
+              images={images}
+              onOpenEditor={(img) => setEditingImage(img)}
+              onRemoveImage={handleRemoveImage}
+              onDownloadSingle={handleDownloadSingle}
+            />
+
+            {/* Empty state guidance when no images are uploaded yet */}
+            {images.length === 0 && (
+              <div className="text-center py-12 px-4 rounded-2xl border border-dashed border-zinc-300 bg-white/60">
+                <div className="w-12 h-12 rounded-2xl bg-zinc-100 flex items-center justify-center mx-auto mb-3 text-zinc-400">
+                  <ImageIcon className="w-6 h-6" />
+                </div>
+                <h3 className="text-sm font-bold text-zinc-800 mb-1">
+                  아직 등록된 이미지가 없습니다
+                </h3>
+                <p className="text-xs text-zinc-500 max-w-md mx-auto mb-4">
+                  위 영역에 블로그에 올릴 사진들을 드래그하여 올려보세요.
+                  자동으로 WebP 규격 변환, 용량 압축 및 네이버 최적화 비율이 계산됩니다.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleAddSampleImages}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-black text-white text-xs font-semibold hover:bg-zinc-800 transition-all shadow-xs"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  샘플 이미지로 바로 테스트해보기
+                </button>
+              </div>
+            )}
+          </>
         )}
       </main>
 
-      {/* 4. Bottom Sticky Summary Bar for ZIP bulk download */}
-      <DownloadSummaryBar images={images} onClearAll={handleClearAll} />
+      {/* 4. Bottom Sticky Summary Bar for ZIP bulk download (when in optimizer tab) */}
+      {activeTab === 'optimizer' && (
+        <DownloadSummaryBar images={images} onClearAll={handleClearAll} />
+      )}
 
       {/* 5. Studio Canvas Editor Modal (Crop, Arrow, Text, Mosaic, Undo/Reset) */}
       {editingImage && (

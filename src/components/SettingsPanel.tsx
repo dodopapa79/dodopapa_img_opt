@@ -218,9 +218,9 @@ export function SettingsPanel({
             </div>
             <div className="grid grid-cols-4 gap-2">
               {[
-                { id: '1200', label: '1200px', sub: '네이버 본문 최적' },
-                { id: '1080', label: '1080px', sub: '인스타/피드' },
-                { id: '1920', label: '1920px', sub: 'FHD 고해상도' },
+                { id: '1200', label: '1200px', sub: '고화질 와이드' },
+                { id: '900', label: '900px', sub: '블로그 표준(추천)' },
+                { id: '600', label: '600px', sub: '모바일·소형' },
                 { id: 'original', label: '원본 크기', sub: '리사이즈 없음' },
               ].map((w) => (
                 <button

@@ -19,6 +19,36 @@ export interface ArrowGeometry {
 }
 
 /**
+ * Calculates high-contrast text color based on background luminance.
+ * Dark background -> #FFFFFF, Light background -> #000000.
+ */
+export function getContrastTextColor(hexColor: string): '#FFFFFF' | '#000000' {
+  if (!hexColor) return '#FFFFFF';
+  let hex = hexColor.replace('#', '').trim();
+  if (hex.startsWith('rgba') || hex.startsWith('rgb')) {
+    const match = hex.match(/\d+/g);
+    if (match && match.length >= 3) {
+      const r = parseInt(match[0], 10);
+      const g = parseInt(match[1], 10);
+      const b = parseInt(match[2], 10);
+      const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+      return brightness >= 155 ? '#000000' : '#FFFFFF';
+    }
+    return '#FFFFFF';
+  }
+
+  if (hex.length === 3) {
+    hex = hex.split('').map((c) => c + c).join('');
+  }
+  const r = parseInt(hex.substring(0, 2), 16) || 0;
+  const g = parseInt(hex.substring(2, 4), 16) || 0;
+  const b = parseInt(hex.substring(4, 6), 16) || 0;
+
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness >= 155 ? '#000000' : '#FFFFFF';
+}
+
+/**
  * Robust mathematical calculation for arrow geometry.
  * Ensures the arrow shaft (tail) is 100% visible, connected,
  * and seamless at any angle (0, 45, 90, 135, 180, 225, 270, 315) without gaps or disappearance.
@@ -87,11 +117,11 @@ export function getArrowGeometry(
  * Arrow pointer has a compact tail pointing directly from the box perimeter to the target.
  */
 export function getCalloutGeometry(callout: CalloutAnnotation) {
-  // Approximate box dimensions based on font size and text length
+  // Generous, comfortable box dimensions with ample padding
   const charCount = Math.max(callout.text.length, 3);
-  const approxTextWidth = charCount * (callout.fontSize * 0.65);
-  const boxW = Math.round(Math.max(120, approxTextWidth + 36));
-  const boxH = Math.round(Math.max(46, callout.fontSize * 1.6 + 18));
+  const approxTextWidth = charCount * (callout.fontSize * 0.72);
+  const boxW = Math.round(Math.max(140, approxTextWidth + 56));
+  const boxH = Math.round(Math.max(52, callout.fontSize * 1.6 + 26));
 
   const halfW = boxW / 2;
   const halfH = boxH / 2;
@@ -222,13 +252,14 @@ export function drawCalloutOnCanvas(ctx: CanvasRenderingContext2D, callout: Call
   ctx.closePath();
   ctx.fill();
 
-  // 2. Draw rounded translucent light-gray box
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.16)';
-  ctx.shadowBlur = 12;
+  // 2. Draw rounded colored box matching arrow color
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.22)';
+  ctx.shadowBlur = 10;
   ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 4;
+  ctx.shadowOffsetY = 3;
 
-  ctx.fillStyle = callout.bgColor || 'rgba(243, 244, 246, 0.88)';
+  const boxBgColor = callout.bgColor || callout.arrowColor;
+  ctx.fillStyle = boxBgColor;
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
     ctx.roundRect(rx, ry, geom.boxW, geom.boxH, radius);
@@ -237,14 +268,15 @@ export function drawCalloutOnCanvas(ctx: CanvasRenderingContext2D, callout: Call
   }
   ctx.fill();
 
-  // Subtle border
+  // Subtle border matching arrow or clean contrast
   ctx.shadowColor = 'transparent';
-  ctx.strokeStyle = callout.borderColor || 'rgba(209, 213, 219, 0.9)';
+  ctx.strokeStyle = callout.borderColor || 'rgba(255, 255, 255, 0.25)';
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // 3. Text inside box
-  ctx.fillStyle = callout.textColor || '#111827';
+  // 3. Text inside box with automatic contrast color
+  const calculatedTextColor = callout.textColor || getContrastTextColor(boxBgColor);
+  ctx.fillStyle = calculatedTextColor;
   ctx.font = `bold ${callout.fontSize}px Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';

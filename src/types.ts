@@ -38,7 +38,7 @@ export interface OptimizationSettings {
   selectedRatio: AspectRatioOption;
   format: OutputFormat;
   quality: number; // 1 to 100
-  maxWidthOption: 'original' | '1920' | '1200' | '1080' | '800';
+  maxWidthOption: 'original' | '1200' | '900' | '600' | '1920' | '1080' | '800';
   padSmallImages: boolean; // 옵션: 가로너비 미달 시 연한 회색 배경 위에 가운데 배치
   padColor: string; // 여백 채우기 배경색 (기본 '#F4F4F5' 연한 회색)
   filenamePrefix: string;
@@ -46,6 +46,49 @@ export interface OptimizationSettings {
   numberPadding: number; // e.g. 2 -> 01, 02
   startNumber: number; // e.g. 1
   watermark: WatermarkConfig;
+}
+
+// -------------------------------------------------------------
+// Blog Thumbnail Maker Types
+// -------------------------------------------------------------
+export type ThumbnailRatio = '1:1' | '16:9' | '4:3';
+
+export type ThumbnailBgType = 'image' | 'solid' | 'gradient';
+
+export interface ThumbnailTextLayer {
+  id: string;
+  text: string;
+  x: number; // 0 to canvasWidth
+  y: number; // 0 to canvasHeight
+  fontSize: number;
+  fontFamily: string;
+  fontWeight: 'normal' | 'bold' | '900';
+  color: string;
+  align: 'left' | 'center' | 'right';
+  // Border (Stroke)
+  hasStroke: boolean;
+  strokeColor: string;
+  strokeWidth: number;
+  // Shadow
+  hasShadow: boolean;
+  shadowColor: string;
+  shadowBlur: number;
+  // Highlight Box (Badge background)
+  hasBadgeBg: boolean;
+  badgeBgColor: string;
+  badgePadding: number;
+  badgeRadius: number;
+}
+
+export interface ThumbnailConfig {
+  ratio: ThumbnailRatio;
+  bgType: ThumbnailBgType;
+  bgImage: string | null; // dataURL or null (persisted in localStorage)
+  bgImageDimOpacity: number; // 0 (none) to 0.8 (dim dark overlay)
+  solidColor: string;
+  gradientPreset: string; // e.g. 'sunset', 'ocean', 'dark', 'purple', 'mint'
+  texts: ThumbnailTextLayer[];
+  format: OutputFormat;
 }
 
 export interface OptimizedImageItem {

@@ -59,6 +59,67 @@ export function getMimeType(format: OutputFormat): string {
 }
 
 /**
+ * High-quality multi-step downscaling to avoid blurriness / fuzziness when shrinking large images.
+ * Keeps text edges razor sharp instead of muddying with single-step bilinear interpolation.
+ */
+function drawScaledImageHighQuality(
+  ctx: CanvasRenderingContext2D,
+  sourceImg: CanvasImageSource,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number,
+  dx: number,
+  dy: number,
+  dw: number,
+  dh: number
+) {
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  let currentW = sw;
+  let currentH = sh;
+
+  // If reduction is minor (less than 2x), draw directly with high quality
+  if (currentW / dw < 2 && currentH / dh < 2) {
+    ctx.drawImage(sourceImg, sx, sy, sw, sh, dx, dy, dw, dh);
+    return;
+  }
+
+  // Multi-step downscale: half-step until close to destination size
+  let tempCanvas = document.createElement('canvas');
+  tempCanvas.width = currentW;
+  tempCanvas.height = currentH;
+  let tempCtx = tempCanvas.getContext('2d');
+  if (!tempCtx) {
+    ctx.drawImage(sourceImg, sx, sy, sw, sh, dx, dy, dw, dh);
+    return;
+  }
+  tempCtx.imageSmoothingEnabled = true;
+  tempCtx.imageSmoothingQuality = 'high';
+  tempCtx.drawImage(sourceImg, sx, sy, sw, sh, 0, 0, currentW, currentH);
+
+  while (currentW * 0.5 > dw && currentH * 0.5 > dh) {
+    const nextW = Math.round(currentW * 0.5);
+    const nextH = Math.round(currentH * 0.5);
+    const nextCanvas = document.createElement('canvas');
+    nextCanvas.width = nextW;
+    nextCanvas.height = nextH;
+    const nextCtx = nextCanvas.getContext('2d');
+    if (!nextCtx) break;
+    nextCtx.imageSmoothingEnabled = true;
+    nextCtx.imageSmoothingQuality = 'high';
+    nextCtx.drawImage(tempCanvas, 0, 0, currentW, currentH, 0, 0, nextW, nextH);
+
+    tempCanvas = nextCanvas;
+    currentW = nextW;
+    currentH = nextH;
+  }
+
+  ctx.drawImage(tempCanvas, 0, 0, currentW, currentH, dx, dy, dw, dh);
+}
+
+/**
  * Optimizes an image based on provided settings
  */
 export async function processAndOptimizeImage(
@@ -99,22 +160,13 @@ export async function processAndOptimizeImage(
     usePadding = true;
     canvasW = maxDim;
 
-    if (aspectRatioValue && aspectRatioValue > 0) {
-      canvasH = Math.max(1, Math.round(maxDim / aspectRatioValue));
-      // Scale down image if height exceeds canvas height, otherwise keep natural size centered
-      const scale = Math.min(1, maxDim / img.naturalWidth, canvasH / img.naturalHeight);
-      drawW = Math.max(1, Math.round(img.naturalWidth * scale));
-      drawH = Math.max(1, Math.round(img.naturalHeight * scale));
-      drawX = Math.round((canvasW - drawW) / 2);
-      drawY = Math.round((canvasH - drawH) / 2);
-    } else {
-      // Original or free ratio: canvas width = maxDim, height = natural image height
-      canvasH = img.naturalHeight;
-      drawW = img.naturalWidth;
-      drawH = img.naturalHeight;
-      drawX = Math.round((canvasW - drawW) / 2);
-      drawY = 0;
-    }
+    // 세로는 정사각형으로 커지지 않고 원본 비율을 유지하며 상하에 깔끔한 슬림 여백(24~36px)만 부여
+    const verticalPadding = Math.min(40, Math.max(20, Math.round(img.naturalHeight * 0.05)));
+    canvasH = img.naturalHeight + verticalPadding * 2;
+    drawW = img.naturalWidth;
+    drawH = img.naturalHeight;
+    drawX = Math.round((canvasW - drawW) / 2);
+    drawY = verticalPadding;
   } else {
     // Normal flow: Crop to ratio if specified
     if (aspectRatioValue && aspectRatioValue > 0) {
@@ -162,15 +214,37 @@ export async function processAndOptimizeImage(
     ctx.fillRect(0, 0, canvasW, canvasH);
   }
 
-  // Smooth scaling
+  // Smooth high quality scaling (maintains crisp text)
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
 
   if (usePadding) {
-    ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, drawX, drawY, drawW, drawH);
+    drawScaledImageHighQuality(
+      ctx,
+      img,
+      0,
+      0,
+      img.naturalWidth,
+      img.naturalHeight,
+      drawX,
+      drawY,
+      drawW,
+      drawH
+    );
   } else {
-    // Draw cropped/scaled image
-    ctx.drawImage(img, sourceX, sourceY, sourceW, sourceH, 0, 0, drawW, drawH);
+    // Draw cropped/scaled image with high quality multi-step downsampling
+    drawScaledImageHighQuality(
+      ctx,
+      img,
+      sourceX,
+      sourceY,
+      sourceW,
+      sourceH,
+      0,
+      0,
+      drawW,
+      drawH
+    );
   }
 
   // Apply watermark if configured and enabled
