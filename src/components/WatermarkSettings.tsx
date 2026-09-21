@@ -102,15 +102,15 @@ export function WatermarkSettings({
   ];
 
   return (
-    <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-4 sm:p-5 space-y-3">
+    <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-3.5 sm:p-5 space-y-3 max-w-full overflow-hidden">
       {/* Header with Enable Switch and LocalStorage Notice */}
       <div className="flex items-center justify-between gap-2 border-b border-zinc-100 pb-2.5">
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
           <div className="w-7 h-7 rounded-lg bg-zinc-900 text-white flex items-center justify-center shadow-xs shrink-0">
             <Shield className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <span className="text-xs sm:text-sm font-bold text-zinc-900 whitespace-nowrap">
                 3. 워터마크 자동 삽입
               </span>
@@ -142,14 +142,14 @@ export function WatermarkSettings({
       </div>
 
       {watermark.enabled && (
-        <div className="space-y-3 pt-1 animate-fade-in text-xs">
+        <div className="space-y-3 pt-1 animate-fade-in text-xs max-w-full overflow-hidden">
           {/* Top Row: Type Switch (Text vs Image) & Quick Profile Button */}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="inline-flex p-0.5 bg-zinc-100 rounded-lg border border-zinc-200/80">
+            <div className="inline-flex p-0.5 bg-zinc-100 rounded-lg border border-zinc-200/80 max-w-full overflow-x-auto">
               <button
                 type="button"
                 onClick={() => handleTypeChange('text')}
-                className={`inline-flex items-center gap-1.5 py-1 px-3 rounded-md text-xs font-semibold transition-all ${
+                className={`inline-flex items-center gap-1.5 py-1 px-2.5 sm:px-3 rounded-md text-xs font-semibold transition-all shrink-0 whitespace-nowrap ${
                   watermark.type === 'text'
                     ? 'bg-white text-black shadow-xs'
                     : 'text-zinc-600 hover:text-black'
@@ -161,7 +161,7 @@ export function WatermarkSettings({
               <button
                 type="button"
                 onClick={() => handleTypeChange('image')}
-                className={`inline-flex items-center gap-1.5 py-1 px-3 rounded-md text-xs font-semibold transition-all ${
+                className={`inline-flex items-center gap-1.5 py-1 px-2.5 sm:px-3 rounded-md text-xs font-semibold transition-all shrink-0 whitespace-nowrap ${
                   watermark.type === 'image'
                     ? 'bg-white text-black shadow-xs'
                     : 'text-zinc-600 hover:text-black'
@@ -176,7 +176,7 @@ export function WatermarkSettings({
               <button
                 type="button"
                 onClick={handleUseProfileLogo}
-                className="inline-flex items-center gap-1 text-[11px] text-zinc-600 hover:text-black font-medium hover:underline py-1"
+                className="inline-flex items-center gap-1 text-[11px] text-zinc-600 hover:text-black font-medium hover:underline py-1 shrink-0 whitespace-nowrap"
               >
                 <Sparkles className="w-3 h-3 text-amber-500" />
                 <span>프로필 로고 즉시 적용</span>
@@ -186,8 +186,8 @@ export function WatermarkSettings({
 
           {/* TEXT MODE CONFIGURATION */}
           {watermark.type === 'text' && (
-            <div className="space-y-2">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <div className="space-y-2 max-w-full">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 max-w-full">
                 <input
                   type="text"
                   value={watermark.text}
@@ -198,11 +198,11 @@ export function WatermarkSettings({
                     })
                   }
                   placeholder="예: © 부업하는 도도파파"
-                  className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-zinc-300 focus:outline-none focus:ring-2 focus:ring-black bg-zinc-50 focus:bg-white transition-all font-medium"
+                  className="w-full sm:flex-1 px-3 py-1.5 text-xs rounded-xl border border-zinc-300 focus:outline-none focus:ring-2 focus:ring-black bg-zinc-50 focus:bg-white transition-all font-medium min-w-0"
                 />
 
                 {/* Quick suggestions */}
-                <div className="flex items-center flex-wrap gap-1.5 shrink-0">
+                <div className="flex items-center flex-wrap gap-1.5 max-w-full">
                   {[
                     '© 부업하는 도도파파',
                     'blog.naver.com/lonnie79',
@@ -217,7 +217,7 @@ export function WatermarkSettings({
                           text: preset,
                         })
                       }
-                      className="px-2 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11px] font-medium transition-colors cursor-pointer"
+                      className="px-2 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[11px] font-medium transition-colors cursor-pointer break-all"
                     >
                       {preset}
                     </button>

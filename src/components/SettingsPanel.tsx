@@ -540,25 +540,88 @@ export function SettingsPanel({
             </div>
           )}
 
-          {/* Prefix input */}
-          <div className="space-y-1">
-            <span className="text-xs font-medium text-zinc-700">파일명 접두사 (Keyword)</span>
+          {/* Filename Mode: Custom Prefix vs Original Filename */}
+          <div className="grid grid-cols-2 gap-1.5 p-1 bg-zinc-100 rounded-xl">
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...settings,
+                  useOriginalFilename: false,
+                })
+              }
+              className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
+                !settings.useOriginalFilename
+                  ? 'bg-white text-black shadow-xs'
+                  : 'text-zinc-600 hover:text-black'
+              }`}
+            >
+              SEO 접두사 규칙
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...settings,
+                  useOriginalFilename: true,
+                })
+              }
+              className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
+                settings.useOriginalFilename
+                  ? 'bg-white text-black shadow-xs'
+                  : 'text-zinc-600 hover:text-black'
+              }`}
+            >
+              원본 파일명 유지
+            </button>
+          </div>
+
+          {/* Prefix input (only if not using original filename) */}
+          {!settings.useOriginalFilename ? (
+            <div className="space-y-1">
+              <span className="text-xs font-medium text-zinc-700">파일명 접두사 (Keyword)</span>
+              <input
+                type="text"
+                value={settings.filenamePrefix}
+                onChange={(e) =>
+                  onChange({
+                    ...settings,
+                    filenamePrefix: e.target.value,
+                  })
+                }
+                placeholder="예: naver-blog-review"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-zinc-300 focus:outline-none focus:ring-2 focus:ring-black bg-zinc-50 focus:bg-white"
+              />
+            </div>
+          ) : (
+            <div className="p-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-[11px] text-zinc-600">
+              💡 업로드한 사진의 원래 파일명을 그대로 유지하면서 확장자만 <code>.{settings.format}</code>로 일괄 변환합니다.
+            </div>
+          )}
+
+          {/* Randomize Suffix toggle (prevents overwrite conflicts in same folder) */}
+          <label className="flex items-start gap-2.5 cursor-pointer pt-1">
             <input
-              type="text"
-              value={settings.filenamePrefix}
+              type="checkbox"
+              checked={!!settings.randomizeFilename}
               onChange={(e) =>
                 onChange({
                   ...settings,
-                  filenamePrefix: e.target.value,
+                  randomizeFilename: e.target.checked,
                 })
               }
-              placeholder="예: naver-blog-review"
-              className="w-full px-3 py-2 text-xs rounded-xl border border-zinc-300 focus:outline-none focus:ring-2 focus:ring-black bg-zinc-50 focus:bg-white"
+              className="mt-0.5 rounded border-zinc-300 text-black focus:ring-black h-4 w-4 accent-black"
             />
-          </div>
+            <div className="text-xs text-zinc-700 leading-tight">
+              <span className="font-semibold text-zinc-900">파일명 중복 방지 고유번호(해시) 추가</span>
+              <p className="text-[10px] text-zinc-400 mt-0.5">
+                동일 폴더 반복 저장 시 덮어쓰기 방지 (예: <code>도도파파_01_9dhs7s.webp</code>)
+              </p>
+            </div>
+          </label>
 
           {/* Slugify toggle */}
-          <label className="flex items-start gap-2.5 cursor-pointer pt-1">
+          <label className="flex items-start gap-2.5 cursor-pointer">
             <input
               type="checkbox"
               checked={settings.slugify}
@@ -584,10 +647,14 @@ export function SettingsPanel({
               생성 파일명 미리보기
             </div>
             <div className="truncate text-emerald-400 font-semibold">
-              {settings.filenamePrefix || 'blog-image'}_01.{settings.format}
+              {settings.useOriginalFilename
+                ? `원본사진이름${settings.randomizeFilename ? '_7bsk2d' : ''}.${settings.format}`
+                : `${settings.filenamePrefix || 'blog-image'}_01${settings.randomizeFilename ? '_7bsk2d' : ''}.${settings.format}`}
             </div>
             <div className="truncate text-zinc-400 text-[11px]">
-              {settings.filenamePrefix || 'blog-image'}_02.{settings.format} ...
+              {settings.useOriginalFilename
+                ? `원본사진이름2${settings.randomizeFilename ? '_3x9n1a' : ''}.${settings.format} ...`
+                : `${settings.filenamePrefix || 'blog-image'}_02${settings.randomizeFilename ? '_3x9n1a' : ''}.${settings.format} ...`}
             </div>
           </div>
         </div>

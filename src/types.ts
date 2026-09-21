@@ -49,6 +49,8 @@ export interface OptimizationSettings {
   slugify: boolean;
   numberPadding: number; // e.g. 2 -> 01, 02
   startNumber: number; // e.g. 1
+  useOriginalFilename?: boolean; // 옵션: 원본 파일명 그대로 사용
+  randomizeFilename?: boolean; // 옵션: 중복 방지 랜덤 문자열 접미사 추가 (예: naver-blog_01_7bsk2d)
   watermark: WatermarkConfig;
 }
 
@@ -125,6 +127,7 @@ export interface OptimizedImageItem {
   optimizedWidth: number;
   optimizedHeight: number;
   optimizedFilename: string;
+  randomSuffix?: string;
   savingsPercent: number;
 
   isProcessing: boolean;

@@ -21,17 +21,50 @@ export function slugify(text: string): string {
     .replace(/-+$/, ''); // Trim - from end
 }
 
+export function generateRandomSuffix(length = 6): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 export function generateFilename(
   prefix: string,
   index: number,
   format: OutputFormat,
   shouldSlugify: boolean,
   padding: number = 2,
-  startNum: number = 1
+  startNum: number = 1,
+  options?: {
+    useOriginalFilename?: boolean;
+    originalName?: string;
+    randomize?: boolean;
+    randomSuffix?: string;
+  }
 ): string {
+  const ext = format === 'webp' ? 'webp' : format === 'jpeg' ? 'jpg' : 'png';
+
+  // Option 1: Use original filename
+  if (options?.useOriginalFilename && options.originalName) {
+    const lastDotIndex = options.originalName.lastIndexOf('.');
+    const baseName = lastDotIndex > 0 ? options.originalName.substring(0, lastDotIndex) : options.originalName;
+    const cleanBase = shouldSlugify ? slugify(baseName) : baseName.trim();
+    if (options.randomize) {
+      const suffix = options.randomSuffix || generateRandomSuffix();
+      return `${cleanBase}_${suffix}.${ext}`;
+    }
+    return `${cleanBase}.${ext}`;
+  }
+
+  // Option 2: Prefix + sequential number (+ random suffix if enabled)
   const cleanPrefix = shouldSlugify ? slugify(prefix || 'blog-image') : (prefix || 'blog-image').trim();
   const num = (startNum + index).toString().padStart(padding, '0');
-  const ext = format === 'webp' ? 'webp' : format === 'jpeg' ? 'jpg' : 'png';
+  if (options?.randomize) {
+    const suffix = options.randomSuffix || generateRandomSuffix();
+    return `${cleanPrefix}_${num}_${suffix}.${ext}`;
+  }
   return `${cleanPrefix}_${num}.${ext}`;
 }
 

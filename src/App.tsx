@@ -10,6 +10,7 @@ import { OptimizationSettings, OptimizedImageItem, AspectRatioOption, WatermarkC
 import {
   processAndOptimizeImage,
   generateFilename,
+  generateRandomSuffix,
   loadImage,
   downloadBlob,
   stripImageMetadata,
@@ -60,6 +61,7 @@ const DEFAULT_SETTINGS: OptimizationSettings = {
   slugify: true,
   numberPadding: 2,
   startNumber: 1,
+  randomizeFilename: true,
   watermark: loadSavedWatermark(),
 };
 
@@ -98,13 +100,20 @@ export default function App() {
     for (let i = 0; i < newFiles.length; i++) {
       const file = newFiles[i];
       const index = images.length + i;
+      const randomSuffix = generateRandomSuffix();
       const filename = generateFilename(
         settings.filenamePrefix,
         index,
         settings.format,
         settings.slugify,
         settings.numberPadding,
-        settings.startNumber
+        settings.startNumber,
+        {
+          useOriginalFilename: settings.useOriginalFilename,
+          originalName: file.name,
+          randomize: settings.randomizeFilename,
+          randomSuffix,
+        }
       );
 
       // Strip all EXIF, GPS, camera metadata immediately upon upload to guarantee 100% privacy
@@ -135,6 +144,7 @@ export default function App() {
           optimizedWidth: optResult.width,
           optimizedHeight: optResult.height,
           optimizedFilename: filename,
+          randomSuffix,
           savingsPercent,
           isProcessing: false,
           hasCustomEdits: false,
@@ -167,13 +177,20 @@ export default function App() {
 
     const updated = await Promise.all(
       images.map(async (item, idx) => {
+        const randomSuffix = item.randomSuffix || generateRandomSuffix();
         const filename = generateFilename(
           newSettings.filenamePrefix,
           idx,
           newSettings.format,
           newSettings.slugify,
           newSettings.numberPadding,
-          newSettings.startNumber
+          newSettings.startNumber,
+          {
+            useOriginalFilename: newSettings.useOriginalFilename,
+            originalName: item.originalName,
+            randomize: newSettings.randomizeFilename,
+            randomSuffix,
+          }
         );
 
         // Re-optimize using currentDataUrl (which holds edits if any)
@@ -351,11 +368,14 @@ export default function App() {
               </div>
             </div>
 
-            {/* 1. Drag & Drop Upload Zone (Moved to Top) */}
+            {/* 1. Drag & Drop Upload Zone with Right-side Thumbnail Queue */}
             <ImageUploadDropzone
               onFilesSelected={handleFilesSelected}
               onAddSampleImages={handleAddSampleImages}
               isLoading={isProcessing}
+              images={images}
+              onRemoveImage={handleRemoveImage}
+              onClearAll={handleClearAll}
             />
 
             {/* 2. Presets and Optimization Settings */}
