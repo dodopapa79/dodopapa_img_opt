@@ -1,5 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import profileLogo from '../assets/images/main_profile_logo_1789007287441.jpg';
+import { APP_VERSION } from '../version';
 
 export function Header() {
   return (
@@ -13,12 +14,19 @@ export function Header() {
             className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl object-cover border border-zinc-200 shadow-sm bg-white ring-1 ring-black/5 flex-shrink-0"
           />
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <h1 className="text-sm sm:text-base md:text-lg font-bold text-zinc-900 tracking-tight whitespace-nowrap truncate">
                 블로그 이미지 최적화도구
               </h1>
               <span className="hidden sm:inline-block px-2 py-0.5 text-[11px] font-semibold bg-zinc-100 text-zinc-700 rounded-md border border-zinc-200 whitespace-nowrap">
                 SEO & WebP Studio
+              </span>
+              <span
+                id="header-app-version-badge"
+                className="px-1.5 py-0.5 text-[10px] font-mono font-medium bg-zinc-100 text-zinc-500 rounded border border-zinc-200 whitespace-nowrap select-none"
+                title="애플리케이션 버전"
+              >
+                {APP_VERSION}
               </span>
             </div>
             <p className="text-xs text-zinc-500 hidden md:block">

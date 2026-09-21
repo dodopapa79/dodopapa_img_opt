@@ -299,15 +299,29 @@ export function EditorModal({
     ctx.drawImage(img, 0, 0);
   };
 
-  // Coordinate conversion
-  const getCanvasCoords = (e: React.MouseEvent | MouseEvent) => {
+  // Coordinate conversion supporting Mouse, Touch, and Pointer events
+  const getCanvasCoords = (e: React.MouseEvent | React.PointerEvent | React.TouchEvent | MouseEvent | PointerEvent | TouchEvent) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
     const rect = canvasRef.current.getBoundingClientRect();
     const scaleX = canvasDims.width / rect.width;
     const scaleY = canvasDims.height / rect.height;
+    
+    let clientX = 0;
+    let clientY = 0;
+    if ('touches' in e && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else if ('changedTouches' in e && e.changedTouches.length > 0) {
+      clientX = e.changedTouches[0].clientX;
+      clientY = e.changedTouches[0].clientY;
+    } else if ('clientX' in e) {
+      clientX = (e as MouseEvent | PointerEvent).clientX;
+      clientY = (e as MouseEvent | PointerEvent).clientY;
+    }
+
     return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
     };
   };
 
@@ -684,17 +698,69 @@ export function EditorModal({
   }, [selectedId, selectedType, editingInlineId, activeArrow, activeCallout, activeText, arrows, callouts, texts]);
 
   // -------------------------------------------------------------
-  // Window-level Mouse Movement for Smooth Dragging
+  // Dragging helper supporting both Mouse and Touch
+  // -------------------------------------------------------------
+  const handleStartDrag = (
+    e: React.MouseEvent | React.TouchEvent,
+    kind:
+      | 'arrow-body'
+      | 'arrow-head'
+      | 'arrow-tail'
+      | 'callout-box'
+      | 'callout-target'
+      | 'text',
+    id: string,
+    initialSnapshot: any
+  ) => {
+    e.stopPropagation();
+    let clientX = 0;
+    let clientY = 0;
+    if ('touches' in e && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else if ('clientX' in e) {
+      clientX = (e as React.MouseEvent).clientX;
+      clientY = (e as React.MouseEvent).clientY;
+    }
+
+    dragInfo.current = {
+      kind,
+      id,
+      startClientX: clientX,
+      startClientY: clientY,
+      initialSnapshot,
+    };
+  };
+
+  // -------------------------------------------------------------
+  // Window-level Mouse & Touch Movement for Smooth Dragging
   // -------------------------------------------------------------
   useEffect(() => {
-    const handleWindowMouseMove = (e: MouseEvent) => {
+    const handleWindowMove = (e: MouseEvent | TouchEvent) => {
       if (!dragInfo.current || !canvasRef.current) return;
+
+      let clientX = 0;
+      let clientY = 0;
+      if ('touches' in e && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else if ('clientX' in e) {
+        clientX = (e as MouseEvent).clientX;
+        clientY = (e as MouseEvent).clientY;
+      } else {
+        return;
+      }
+
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+
       const rect = canvasRef.current.getBoundingClientRect();
       const scaleX = canvasDims.width / rect.width;
       const scaleY = canvasDims.height / rect.height;
 
-      const deltaX = (e.clientX - dragInfo.current.startClientX) * scaleX;
-      const deltaY = (e.clientY - dragInfo.current.startClientY) * scaleY;
+      const deltaX = (clientX - dragInfo.current.startClientX) * scaleX;
+      const deltaY = (clientY - dragInfo.current.startClientY) * scaleY;
       const { kind, id, initialSnapshot } = dragInfo.current;
 
       if (kind === 'arrow-body') {
@@ -798,18 +864,25 @@ export function EditorModal({
       }
     };
 
-    const handleWindowMouseUp = () => {
+    const handleWindowEnd = () => {
       if (dragInfo.current) {
         dragInfo.current = null;
         pushHistorySnapshot();
       }
     };
 
-    window.addEventListener('mousemove', handleWindowMouseMove);
-    window.addEventListener('mouseup', handleWindowMouseUp);
+    window.addEventListener('mousemove', handleWindowMove);
+    window.addEventListener('mouseup', handleWindowEnd);
+    window.addEventListener('touchmove', handleWindowMove, { passive: false });
+    window.addEventListener('touchend', handleWindowEnd);
+    window.addEventListener('touchcancel', handleWindowEnd);
+
     return () => {
-      window.removeEventListener('mousemove', handleWindowMouseMove);
-      window.removeEventListener('mouseup', handleWindowMouseUp);
+      window.removeEventListener('mousemove', handleWindowMove);
+      window.removeEventListener('mouseup', handleWindowEnd);
+      window.removeEventListener('touchmove', handleWindowMove);
+      window.removeEventListener('touchend', handleWindowEnd);
+      window.removeEventListener('touchcancel', handleWindowEnd);
     };
   }, [canvasDims]);
 
@@ -841,7 +914,7 @@ export function EditorModal({
   }, [selectedType, selectedId, deleteSelectedArrow, deleteSelectedCallout, deleteSelectedText]);
 
   // -------------------------------------------------------------
-  // Canvas Mouse Events (Crop & Mosaic drawing, or clicking empty space)
+  // Canvas Mouse & Touch Events (Crop & Mosaic drawing, or clicking empty space)
   // -------------------------------------------------------------
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     setEditingInlineId(null);
@@ -913,6 +986,70 @@ export function EditorModal({
       }
       setMosaicRect(null);
     }
+  };
+
+  const handleCanvasTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.cancelable) e.preventDefault();
+    setEditingInlineId(null);
+    const { x, y } = getCanvasCoords(e);
+    setSelectedId(null);
+    setSelectedType(null);
+
+    if (activeTool === 'crop') {
+      isDraggingCrop.current = true;
+      cropStartPos.current = { x, y };
+      setCropRect({ x, y, w: 0, h: 0 });
+    } else if (activeTool === 'mosaic') {
+      isDraggingCrop.current = true;
+      cropStartPos.current = { x, y };
+      setMosaicRect({ x, y, w: 0, h: 0 });
+    }
+  };
+
+  const handleCanvasTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDraggingCrop.current || !cropStartPos.current) return;
+    if (e.cancelable) e.preventDefault();
+    const { x, y } = getCanvasCoords(e);
+
+    if (activeTool === 'crop') {
+      let w = x - cropStartPos.current.x;
+      let h = y - cropStartPos.current.y;
+      const ratio = getAspectRatioMultiplier(selectedCropRatio);
+
+      if (ratio !== null) {
+        const absW = Math.abs(w);
+        const signW = Math.sign(w) || 1;
+        const signH = Math.sign(h) || 1;
+        h = (absW / ratio) * signH;
+      }
+
+      const rectX = w < 0 ? cropStartPos.current.x + w : cropStartPos.current.x;
+      const rectY = h < 0 ? cropStartPos.current.y + h : cropStartPos.current.y;
+
+      setCropRect({
+        x: Math.max(0, rectX),
+        y: Math.max(0, rectY),
+        w: Math.abs(w),
+        h: Math.abs(h),
+      });
+    } else if (activeTool === 'mosaic') {
+      const w = x - cropStartPos.current.x;
+      const h = y - cropStartPos.current.y;
+      const rectX = w < 0 ? cropStartPos.current.x + w : cropStartPos.current.x;
+      const rectY = h < 0 ? cropStartPos.current.y + h : cropStartPos.current.y;
+
+      setMosaicRect({
+        x: Math.max(0, rectX),
+        y: Math.max(0, rectY),
+        w: Math.abs(w),
+        h: Math.abs(h),
+      });
+    }
+  };
+
+  const handleCanvasTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.cancelable) e.preventDefault();
+    handleCanvasMouseUp();
   };
 
   // -------------------------------------------------------------
@@ -1012,8 +1149,8 @@ export function EditorModal({
         </div>
 
         {/* Primary Tool Selector Bar */}
-        <div className="bg-zinc-900 border-b border-zinc-800 px-2 sm:px-4 py-1.5 sm:py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3 shrink-0">
-          <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 overflow-x-auto no-scrollbar w-full sm:w-auto shrink-0">
+        <div className="bg-zinc-900 border-b border-zinc-800 px-2 sm:px-4 py-1 sm:py-2 flex flex-col gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 overflow-x-auto no-scrollbar whitespace-nowrap w-full shrink-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {[
               { id: 'select', label: '선택·미리보기', icon: MousePointer },
               { id: 'crop', label: '자르기', icon: Crop },
@@ -1034,15 +1171,27 @@ export function EditorModal({
                       setSelectedId(null);
                       setSelectedType(null);
                       setEditingInlineId(null);
-                    } else if (tool.id === 'arrow' && !activeArrow && arrows.length > 0) {
-                      setSelectedId(arrows[arrows.length - 1].id);
-                      setSelectedType('arrow');
-                    } else if (tool.id === 'callout' && !activeCallout && callouts.length > 0) {
-                      setSelectedId(callouts[callouts.length - 1].id);
-                      setSelectedType('callout');
-                    } else if (tool.id === 'text' && !activeText && texts.length > 0) {
-                      setSelectedId(texts[texts.length - 1].id);
-                      setSelectedType('text');
+                    } else if (tool.id === 'arrow') {
+                      if (arrows.length === 0) {
+                        handleAddNewArrow();
+                      } else if (!activeArrow) {
+                        setSelectedId(arrows[arrows.length - 1].id);
+                        setSelectedType('arrow');
+                      }
+                    } else if (tool.id === 'callout') {
+                      if (callouts.length === 0) {
+                        handleAddNewCallout();
+                      } else if (!activeCallout) {
+                        setSelectedId(callouts[callouts.length - 1].id);
+                        setSelectedType('callout');
+                      }
+                    } else if (tool.id === 'text') {
+                      if (texts.length === 0) {
+                        handleAddNewText();
+                      } else if (!activeText) {
+                        setSelectedId(texts[texts.length - 1].id);
+                        setSelectedType('text');
+                      }
                     }
                   }}
                   className={`inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
@@ -1059,23 +1208,23 @@ export function EditorModal({
           </div>
 
           {/* Sub-toolbar Controls per Active Tool */}
-          <div className="flex items-center flex-wrap gap-1.5 sm:gap-2 text-xs overflow-x-auto no-scrollbar w-full sm:w-auto py-0.5">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-xs overflow-x-auto no-scrollbar whitespace-nowrap w-full py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {/* 0. Select / Preview Mode */}
             {activeTool === 'select' && (
-              <div className="flex items-center gap-2 text-zinc-300 py-0.5">
+              <div className="flex items-center gap-2 text-zinc-300 py-0.5 shrink-0">
                 <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-800/60 px-2.5 py-1 rounded-lg">
                   <Check className="w-3.5 h-3.5" />
                   <span>완성 화면 미리보기 모드</span>
                 </span>
                 <span className="text-zinc-400 text-xs hidden sm:inline">
-                  (캔버스의 화살표나 말풍선, 텍스트를 클릭하면 언제든 선택하여 다시 수정할 수 있습니다)
+                  (캔버스의 화살표나 말풍선, 텍스트를 클릭하거나 터치하면 언제든 선택하여 다시 수정할 수 있습니다)
                 </span>
               </div>
             )}
 
             {/* 1. Crop Options */}
             {activeTool === 'crop' && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <span className="text-zinc-400">비율:</span>
                 <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
                   {(['free', '1:1', '3:4', '16:9', '4:3'] as AspectRatioOption[]).map((r) => (
@@ -1109,7 +1258,7 @@ export function EditorModal({
 
             {/* 2. Arrow Options (Length, Angle Presets, Width, Colors) */}
             {activeTool === 'arrow' && (
-              <div className="flex items-center flex-wrap gap-2.5">
+              <div className="flex items-center gap-2 shrink-0 whitespace-nowrap">
                 <button
                   type="button"
                   onClick={() => handleAddNewArrow()}
@@ -1266,7 +1415,7 @@ export function EditorModal({
 
             {/* 3. Callout Options (화살표 말풍선: Text input, pointer directions, colors) */}
             {activeTool === 'callout' && (
-              <div className="flex items-center flex-wrap gap-2.5">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap">
                 <button
                   type="button"
                   onClick={() => handleAddNewCallout()}
@@ -1405,7 +1554,7 @@ export function EditorModal({
 
             {/* 4. Text Options (Re-clickable & Re-movable text) */}
             {activeTool === 'text' && (
-              <div className="flex items-center flex-wrap gap-2.5">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap">
                 <button
                   type="button"
                   onClick={() => handleAddNewText()}
@@ -1594,7 +1743,14 @@ export function EditorModal({
               setEditingInlineId(null);
             }
           }}
-          className="flex-1 bg-zinc-950/90 overflow-auto p-1.5 sm:p-4 flex items-center justify-center min-h-[220px] relative select-none w-full h-full"
+          onTouchStart={(e) => {
+            if (e.target === containerRef.current) {
+              setSelectedId(null);
+              setSelectedType(null);
+              setEditingInlineId(null);
+            }
+          }}
+          className="flex-1 bg-zinc-950/90 overflow-auto p-1.5 sm:p-4 flex items-center justify-center min-h-[220px] relative select-none w-full h-full touch-pan-x touch-pan-y"
         >
           <div className="relative inline-block shadow-2xl border border-zinc-800/80 rounded-md overflow-hidden max-w-full max-h-full">
             {/* Base HTML5 Canvas */}
@@ -1603,7 +1759,11 @@ export function EditorModal({
               onMouseDown={handleCanvasMouseDown}
               onMouseMove={handleCanvasMouseMove}
               onMouseUp={handleCanvasMouseUp}
-              className={`block max-h-[60vh] sm:max-h-[74vh] max-w-full w-auto h-auto object-contain mx-auto ${
+              onTouchStart={handleCanvasTouchStart}
+              onTouchMove={handleCanvasTouchMove}
+              onTouchEnd={handleCanvasTouchEnd}
+              onTouchCancel={handleCanvasTouchEnd}
+              className={`block max-h-[58vh] sm:max-h-[74vh] max-w-full w-auto h-auto object-contain mx-auto touch-none canvas-touch-gesture-none ${
                 activeTool === 'crop' || activeTool === 'mosaic'
                   ? 'cursor-crosshair'
                   : 'cursor-default'
@@ -1665,21 +1825,20 @@ export function EditorModal({
                         x2={arrow.endX}
                         y2={arrow.endY}
                         stroke="transparent"
-                        strokeWidth={Math.max(arrow.width + 24, 38)}
+                        strokeWidth={Math.max(arrow.width + 28, 44)}
                         strokeLinecap="round"
-                        className="cursor-grab active:cursor-grabbing"
+                        className="cursor-grab active:cursor-grabbing touch-none"
                         onMouseDown={(e) => {
-                          e.stopPropagation();
                           setSelectedId(arrow.id);
                           setSelectedType('arrow');
                           setActiveTool('arrow');
-                          dragInfo.current = {
-                            kind: 'arrow-body',
-                            id: arrow.id,
-                            startClientX: e.clientX,
-                            startClientY: e.clientY,
-                            initialSnapshot: { ...arrow },
-                          };
+                          handleStartDrag(e, 'arrow-body', arrow.id, { ...arrow });
+                        }}
+                        onTouchStart={(e) => {
+                          setSelectedId(arrow.id);
+                          setSelectedType('arrow');
+                          setActiveTool('arrow');
+                          handleStartDrag(e, 'arrow-body', arrow.id, { ...arrow });
                         }}
                       />
 
@@ -1711,19 +1870,11 @@ export function EditorModal({
                           <circle
                             cx={arrow.startX}
                             cy={arrow.startY}
-                            r={18}
+                            r={24}
                             fill="transparent"
-                            className="cursor-grab active:cursor-grabbing"
-                            onMouseDown={(e) => {
-                              e.stopPropagation();
-                              dragInfo.current = {
-                                kind: 'arrow-tail',
-                                id: arrow.id,
-                                startClientX: e.clientX,
-                                startClientY: e.clientY,
-                                initialSnapshot: { ...arrow },
-                              };
-                            }}
+                            className="cursor-grab active:cursor-grabbing touch-none"
+                            onMouseDown={(e) => handleStartDrag(e, 'arrow-tail', arrow.id, { ...arrow })}
+                            onTouchStart={(e) => handleStartDrag(e, 'arrow-tail', arrow.id, { ...arrow })}
                           />
                           {/* Tail Anchor Handle - Visible Stable Circle */}
                           <circle
@@ -1741,19 +1892,11 @@ export function EditorModal({
                           <circle
                             cx={arrow.endX}
                             cy={arrow.endY}
-                            r={18}
+                            r={24}
                             fill="transparent"
-                            className="cursor-crosshair"
-                            onMouseDown={(e) => {
-                              e.stopPropagation();
-                              dragInfo.current = {
-                                kind: 'arrow-head',
-                                id: arrow.id,
-                                startClientX: e.clientX,
-                                startClientY: e.clientY,
-                                initialSnapshot: { ...arrow },
-                              };
-                            }}
+                            className="cursor-crosshair touch-none"
+                            onMouseDown={(e) => handleStartDrag(e, 'arrow-head', arrow.id, { ...arrow })}
+                            onTouchStart={(e) => handleStartDrag(e, 'arrow-head', arrow.id, { ...arrow })}
                           />
                           {/* Head Anchor Handle - Visible Stable Circle */}
                           <circle
@@ -1836,19 +1979,11 @@ export function EditorModal({
                           <circle
                             cx={callout.targetX}
                             cy={callout.targetY}
-                            r={18}
+                            r={24}
                             fill="transparent"
-                            className="cursor-crosshair"
-                            onMouseDown={(e) => {
-                              e.stopPropagation();
-                              dragInfo.current = {
-                                kind: 'callout-target',
-                                id: callout.id,
-                                startClientX: e.clientX,
-                                startClientY: e.clientY,
-                                initialSnapshot: { ...callout },
-                              };
-                            }}
+                            className="cursor-crosshair touch-none"
+                            onMouseDown={(e) => handleStartDrag(e, 'callout-target', callout.id, { ...callout })}
+                            onTouchStart={(e) => handleStartDrag(e, 'callout-target', callout.id, { ...callout })}
                           />
                           <circle
                             cx={callout.targetX}
@@ -1884,6 +2019,7 @@ export function EditorModal({
                 <button
                   type="button"
                   onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     setEditingInlineId(activeCallout.id);
@@ -1897,6 +2033,7 @@ export function EditorModal({
                 <button
                   type="button"
                   onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     deleteSelectedCallout();
@@ -1924,18 +2061,19 @@ export function EditorModal({
                     transform: 'translate(-50%, -50%)',
                   }}
                   onMouseDown={(e) => {
-                    e.stopPropagation();
                     setSelectedId(callout.id);
                     setSelectedType('callout');
                     setActiveTool('callout');
                     if (!isInlineEditing) {
-                      dragInfo.current = {
-                        kind: 'callout-box',
-                        id: callout.id,
-                        startClientX: e.clientX,
-                        startClientY: e.clientY,
-                        initialSnapshot: { ...callout },
-                      };
+                      handleStartDrag(e, 'callout-box', callout.id, { ...callout });
+                    }
+                  }}
+                  onTouchStart={(e) => {
+                    setSelectedId(callout.id);
+                    setSelectedType('callout');
+                    setActiveTool('callout');
+                    if (!isInlineEditing) {
+                      handleStartDrag(e, 'callout-box', callout.id, { ...callout });
                     }
                   }}
                   onDoubleClick={(e) => {
@@ -2019,6 +2157,7 @@ export function EditorModal({
                 <button
                   type="button"
                   onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     setEditingInlineId(activeText.id);
@@ -2032,6 +2171,7 @@ export function EditorModal({
                 <button
                   type="button"
                   onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     deleteSelectedText();
@@ -2059,18 +2199,19 @@ export function EditorModal({
                     transform: 'translate(-50%, -50%)',
                   }}
                   onMouseDown={(e) => {
-                    e.stopPropagation();
                     setSelectedId(textItem.id);
                     setSelectedType('text');
                     setActiveTool('text');
                     if (!isInlineEditing) {
-                      dragInfo.current = {
-                        kind: 'text',
-                        id: textItem.id,
-                        startClientX: e.clientX,
-                        startClientY: e.clientY,
-                        initialSnapshot: { ...textItem },
-                      };
+                      handleStartDrag(e, 'text', textItem.id, { ...textItem });
+                    }
+                  }}
+                  onTouchStart={(e) => {
+                    setSelectedId(textItem.id);
+                    setSelectedType('text');
+                    setActiveTool('text');
+                    if (!isInlineEditing) {
+                      handleStartDrag(e, 'text', textItem.id, { ...textItem });
                     }
                   }}
                   onDoubleClick={(e) => {

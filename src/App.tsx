@@ -17,6 +17,7 @@ import {
 } from './utils/imageProcessor';
 import { createSampleImages } from './utils/sampleImages';
 import { CheckCircle2, ShieldCheck, Zap, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { APP_VERSION } from './version';
 
 const WATERMARK_STORAGE_KEY = 'blog_optimizer_watermark_settings_v1';
 
@@ -439,8 +440,16 @@ export default function App() {
       {/* Footer */}
       <footer className="mt-auto border-t border-zinc-200 bg-white py-6 text-center text-xs text-zinc-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div>
-            © 2026 <strong>블로그 이미지 최적화도구</strong> · Designed for Naver, Tistory & WordPress
+          <div className="flex items-center gap-1.5">
+            <span>© 2026 <strong>블로그 이미지 최적화도구</strong></span>
+            <span
+              id="footer-app-version-badge"
+              className="px-1.5 py-0.2 text-[10px] font-mono font-medium text-zinc-400 bg-zinc-100 rounded border border-zinc-200/60"
+            >
+              {APP_VERSION}
+            </span>
+            <span className="text-zinc-300">·</span>
+            <span>Designed for Naver, Tistory & WordPress</span>
           </div>
           <div className="flex items-center gap-2">
             <span>Special thanks to</span>
