@@ -1148,16 +1148,16 @@ export function EditorModal({
           </div>
         </div>
 
-        {/* Primary Tool Selector Bar */}
-        <div className="bg-zinc-900 border-b border-zinc-800 px-2 sm:px-4 py-1 sm:py-2 flex flex-col gap-1.5 shrink-0">
-          <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 overflow-x-auto no-scrollbar whitespace-nowrap w-full shrink-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Primary Tool Selector Bar & Responsive Sub-Toolbar Section */}
+        <div className="bg-zinc-900 border-b border-zinc-800 px-2 sm:px-4 py-1.5 sm:py-2 flex flex-col gap-1.5 shrink-0 max-h-[38vh] sm:max-h-none overflow-y-auto">
+          <div className="grid grid-cols-3 sm:flex sm:flex-wrap items-center gap-1 sm:gap-1.5 bg-zinc-950 p-1 sm:p-1.5 rounded-xl border border-zinc-800 w-full">
             {[
               { id: 'select', label: '선택·미리보기', icon: MousePointer },
               { id: 'crop', label: '자르기', icon: Crop },
+              { id: 'mosaic', label: '모자이크', icon: Grid },
               { id: 'arrow', label: '굵은 화살표', icon: ArrowUpRight },
               { id: 'callout', label: '화살표 말풍선', icon: MessageSquare },
               { id: 'text', label: '텍스트 삽입', icon: Type },
-              { id: 'mosaic', label: '모자이크', icon: Grid },
             ].map((tool) => {
               const Icon = tool.icon;
               const isActive = activeTool === tool.id;
@@ -1194,60 +1194,62 @@ export function EditorModal({
                       }
                     }
                   }}
-                  className={`inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+                  className={`inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-xs font-semibold transition-all cursor-pointer ${
                     isActive
                       ? 'bg-zinc-100 text-black shadow-sm'
                       : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
-                  <span>{tool.label}</span>
+                  <span className="truncate">{tool.label}</span>
                 </button>
               );
             })}
           </div>
 
-          {/* Sub-toolbar Controls per Active Tool */}
-          <div className="flex items-center gap-1.5 sm:gap-2 text-xs overflow-x-auto no-scrollbar whitespace-nowrap w-full py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* Sub-toolbar Controls per Active Tool - Fully Responsive Wrapping */}
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs w-full py-0.5">
             {/* 0. Select / Preview Mode */}
             {activeTool === 'select' && (
-              <div className="flex items-center gap-2 text-zinc-300 py-0.5 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 text-zinc-300 py-0.5 w-full">
                 <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-800/60 px-2.5 py-1 rounded-lg">
-                  <Check className="w-3.5 h-3.5" />
+                  <Check className="w-3.5 h-3.5 shrink-0" />
                   <span>완성 화면 미리보기 모드</span>
                 </span>
-                <span className="text-zinc-400 text-xs hidden sm:inline">
-                  (캔버스의 화살표나 말풍선, 텍스트를 클릭하거나 터치하면 언제든 선택하여 다시 수정할 수 있습니다)
+                <span className="text-zinc-400 text-xs">
+                  (캔버스의 화살표나 말풍선, 텍스트를 클릭/터치하면 언제든 선택하여 다시 수정할 수 있습니다)
                 </span>
               </div>
             )}
 
             {/* 1. Crop Options */}
             {activeTool === 'crop' && (
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-zinc-400">비율:</span>
-                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
-                  {(['free', '1:1', '3:4', '16:9', '4:3'] as AspectRatioOption[]).map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => setSelectedCropRatio(r)}
-                      className={`px-2 py-1 rounded text-xs transition-colors ${
-                        selectedCropRatio === r
-                          ? 'bg-zinc-800 text-white font-bold'
-                          : 'text-zinc-400 hover:text-zinc-200'
-                      }`}
-                    >
-                      {r === 'free' ? '자유' : r}
-                    </button>
-                  ))}
+              <div className="flex flex-wrap items-center gap-2 w-full">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-zinc-400 shrink-0">비율:</span>
+                  <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800 flex-wrap">
+                    {(['free', '1:1', '3:4', '16:9', '4:3'] as AspectRatioOption[]).map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setSelectedCropRatio(r)}
+                        className={`px-2 py-1 rounded text-xs transition-colors ${
+                          selectedCropRatio === r
+                            ? 'bg-zinc-800 text-white font-bold'
+                            : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {r === 'free' ? '자유' : r}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {cropRect && cropRect.w > 10 && cropRect.h > 10 && (
                   <button
                     type="button"
                     onClick={applyCrop}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold transition-all shadow-xs"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs transition-all shadow-xs shrink-0"
                   >
                     <Check className="w-3.5 h-3.5" />
                     <span>자르기 적용</span>
@@ -1258,33 +1260,47 @@ export function EditorModal({
 
             {/* 2. Arrow Options (Length, Angle Presets, Width, Colors) */}
             {activeTool === 'arrow' && (
-              <div className="flex items-center gap-2 shrink-0 whitespace-nowrap">
-                <button
-                  type="button"
-                  onClick={() => handleAddNewArrow()}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-semibold transition-colors border border-zinc-700 shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>화살표 추가</span>
-                </button>
-
-                {activeArrow && (
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedId(null);
-                      setSelectedType(null);
-                    }}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium transition-colors border border-zinc-700 shadow-xs"
-                    title="선택을 해제하여 앵커 없는 완성된 모습을 확인합니다 (캔버스 빈 공간 클릭으로도 해제)"
+                    onClick={() => handleAddNewArrow()}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-semibold transition-colors border border-zinc-700 shadow-xs"
                   >
-                    <Eye className="w-3.5 h-3.5 text-sky-400" />
-                    <span>완성 확인</span>
+                    <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>화살표 추가</span>
                   </button>
-                )}
+
+                  {activeArrow && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedId(null);
+                        setSelectedType(null);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium transition-colors border border-zinc-700 shadow-xs"
+                      title="선택을 해제하여 앵커 없는 완성된 모습을 확인합니다"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-sky-400" />
+                      <span>완성 확인</span>
+                    </button>
+                  )}
+
+                  {activeArrow && (
+                    <button
+                      type="button"
+                      onClick={deleteSelectedArrow}
+                      className="p-1.5 rounded-lg bg-zinc-950 hover:bg-rose-950/60 text-zinc-400 hover:text-rose-400 border border-zinc-800 transition-colors"
+                      title="선택 화살표 삭제"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
 
                 {/* Color Picker */}
-                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800 shrink-0">
+                  <span className="text-zinc-400 text-[11px] px-0.5">색상:</span>
                   {[
                     { label: '빨강', color: '#EF4444' },
                     { label: '노랑', color: '#EAB308' },
@@ -1301,7 +1317,7 @@ export function EditorModal({
                         setDefaultArrowColor(c.color);
                         updateSelectedArrow({ color: c.color });
                       }}
-                      className={`w-4 h-4 rounded-full border transition-transform ${
+                      className={`w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full border transition-transform ${
                         (activeArrow?.color || defaultArrowColor) === c.color
                           ? 'scale-125 border-white ring-1 ring-white'
                           : 'border-zinc-600 opacity-70 hover:opacity-100'
@@ -1313,8 +1329,8 @@ export function EditorModal({
                 </div>
 
                 {/* Arrow Tail Length Slider */}
-                <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
-                  <span className="text-zinc-400">꼬리 길이:</span>
+                <div className="flex items-center gap-1.5 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800 shrink-0">
+                  <span className="text-zinc-400 text-[11px]">길이:</span>
                   <input
                     type="range"
                     min="60"
@@ -1326,17 +1342,39 @@ export function EditorModal({
                       setDefaultArrowLength(val);
                       setArrowLength(val);
                     }}
-                    className="w-20 accent-emerald-400 cursor-pointer"
+                    className="w-16 sm:w-20 accent-emerald-400 cursor-pointer"
                   />
-                  <span className="text-[11px] font-mono text-zinc-300 w-8 text-right">
-                    {activeArrow?.length || defaultArrowLength}px
+                  <span className="text-[11px] font-mono text-zinc-300 w-7 text-right">
+                    {activeArrow?.length || defaultArrowLength}
+                  </span>
+                </div>
+
+                {/* Arrow Width Slider */}
+                <div className="flex items-center gap-1.5 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800 shrink-0">
+                  <span className="text-zinc-400 text-[11px]">굵기:</span>
+                  <input
+                    type="range"
+                    min="8"
+                    max="32"
+                    step="2"
+                    value={activeArrow?.width || defaultArrowWidth}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setDefaultArrowWidth(val);
+                      updateSelectedArrow({ width: val });
+                    }}
+                    className="w-14 sm:w-16 accent-emerald-400 cursor-pointer"
+                  />
+                  <span className="text-[11px] font-mono text-zinc-300 w-5">
+                    {activeArrow?.width || defaultArrowWidth}
                   </span>
                 </div>
 
                 {/* Arrow Angle Presets */}
-                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                <div className="flex items-center flex-wrap gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                  <span className="text-zinc-400 text-[11px] px-1">각도:</span>
                   {[
-                    { deg: -45, label: '-45° (기본)', icon: ArrowDownLeft, dirX: -0.7071, dirY: 0.7071, title: '기본: 좌측 점, 우측 꼬리 (-45° 좌하향)' },
+                    { deg: -45, label: '-45°(기본)', icon: ArrowDownLeft, dirX: -0.7071, dirY: 0.7071, title: '기본: 좌측 점, 우측 꼬리 (-45° 좌하향)' },
                     { deg: 180, label: '180°', icon: ArrowLeft, dirX: -1, dirY: 0, title: '좌측 수평 (180°)' },
                     { deg: 135, label: '135°', icon: ArrowUpLeft, dirX: -0.7071, dirY: -0.7071, title: '좌상단 (135°)' },
                     { deg: 0, label: '0°', icon: ArrowRight, dirX: 1, dirY: 0, title: '우측 수평 (0°)' },
@@ -1377,72 +1415,52 @@ export function EditorModal({
                     <RotateCw className="w-3 h-3" />
                   </button>
                 </div>
-
-                {/* Arrow Width Slider */}
-                <div className="flex items-center gap-1.5 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
-                  <span className="text-zinc-400">굵기:</span>
-                  <input
-                    type="range"
-                    min="8"
-                    max="32"
-                    step="2"
-                    value={activeArrow?.width || defaultArrowWidth}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10);
-                      setDefaultArrowWidth(val);
-                      updateSelectedArrow({ width: val });
-                    }}
-                    className="w-16 accent-emerald-400 cursor-pointer"
-                  />
-                  <span className="text-[11px] font-mono text-zinc-300 w-5">
-                    {activeArrow?.width || defaultArrowWidth}
-                  </span>
-                </div>
-
-                {/* Delete Button */}
-                {activeArrow && (
-                  <button
-                    type="button"
-                    onClick={deleteSelectedArrow}
-                    className="p-1.5 rounded-lg bg-zinc-950 hover:bg-rose-950/60 text-zinc-400 hover:text-rose-400 border border-zinc-800 transition-colors"
-                    title="선택 화살표 삭제"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
               </div>
             )}
 
             {/* 3. Callout Options (화살표 말풍선: Text input, pointer directions, colors) */}
             {activeTool === 'callout' && (
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap">
-                <button
-                  type="button"
-                  onClick={() => handleAddNewCallout()}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-semibold transition-colors border border-zinc-700 shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>말풍선 추가</span>
-                </button>
-
-                {activeCallout && (
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedId(null);
-                      setSelectedType(null);
-                      setEditingInlineId(null);
-                    }}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium transition-colors border border-zinc-700 shadow-xs"
-                    title="선택을 해제하여 완성 화면을 확인합니다 (캔버스 빈 공간 클릭으로도 해제)"
+                    onClick={() => handleAddNewCallout()}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-semibold transition-colors border border-zinc-700 shadow-xs"
                   >
-                    <Eye className="w-3.5 h-3.5 text-sky-400" />
-                    <span>완성 확인</span>
+                    <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>말풍선 추가</span>
                   </button>
-                )}
+
+                  {activeCallout && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedId(null);
+                        setSelectedType(null);
+                        setEditingInlineId(null);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium transition-colors border border-zinc-700 shadow-xs"
+                      title="선택을 해제하여 완성 화면을 확인합니다"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-sky-400" />
+                      <span>완성 확인</span>
+                    </button>
+                  )}
+
+                  {activeCallout && (
+                    <button
+                      type="button"
+                      onClick={deleteSelectedCallout}
+                      className="p-1.5 rounded-lg bg-zinc-950 hover:bg-rose-950/60 text-zinc-400 hover:text-rose-400 border border-zinc-800 transition-colors"
+                      title="선택 말풍선 삭제"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
 
                 {/* Text input */}
-                <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
+                <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800 flex-1 min-w-[140px] max-w-full sm:max-w-xs">
                   <input
                     type="text"
                     value={activeCallout ? activeCallout.text : defaultCalloutText}
@@ -1452,13 +1470,13 @@ export function EditorModal({
                       updateSelectedCallout({ text: val });
                     }}
                     placeholder="말풍선 설명 입력"
-                    className="bg-transparent border-none text-white text-xs focus:outline-none w-36 sm:w-44 placeholder-zinc-500"
+                    className="bg-transparent border-none text-white text-xs focus:outline-none w-full placeholder-zinc-500"
                   />
                 </div>
 
                 {/* Font Size Slider */}
-                <div className="flex items-center gap-1 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
-                  <span className="text-zinc-400">크기:</span>
+                <div className="flex items-center gap-1 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800 shrink-0">
+                  <span className="text-zinc-400 text-[11px]">크기:</span>
                   <input
                     type="range"
                     min="14"
@@ -1470,7 +1488,7 @@ export function EditorModal({
                       setDefaultCalloutFontSize(val);
                       updateSelectedCallout({ fontSize: val });
                     }}
-                    className="w-16 accent-emerald-400 cursor-pointer"
+                    className="w-14 sm:w-16 accent-emerald-400 cursor-pointer"
                   />
                   <span className="text-[11px] font-mono text-zinc-300 w-5">
                     {activeCallout?.fontSize || defaultCalloutFontSize}
@@ -1478,7 +1496,7 @@ export function EditorModal({
                 </div>
 
                 {/* Arrow & Box Color Picker */}
-                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800 shrink-0">
                   <span className="text-zinc-400 text-[11px] ml-1 mr-0.5">색상:</span>
                   {[
                     { label: '빨강', color: '#EF4444' },
@@ -1502,7 +1520,7 @@ export function EditorModal({
                           textColor: contrast,
                         });
                       }}
-                      className={`w-3.5 h-3.5 rounded-full border transition-transform ${
+                      className={`w-4 h-4 rounded-full border transition-transform ${
                         (activeCallout?.arrowColor || defaultCalloutArrowColor) === c.color
                           ? 'scale-125 border-white ring-1 ring-white'
                           : 'border-zinc-600 opacity-70 hover:opacity-100'
@@ -1514,7 +1532,7 @@ export function EditorModal({
                 </div>
 
                 {/* Pointer Direction Presets */}
-                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800 shrink-0">
                   <span className="text-zinc-400 text-[11px] ml-1 mr-0.5">방향:</span>
                   {[
                     { dir: 'down' as const, label: '아래', icon: ArrowDown },
@@ -1537,51 +1555,52 @@ export function EditorModal({
                     );
                   })}
                 </div>
-
-                {/* Delete Callout */}
-                {activeCallout && (
-                  <button
-                    type="button"
-                    onClick={deleteSelectedCallout}
-                    className="p-1.5 rounded-lg bg-zinc-950 hover:bg-rose-950/60 text-zinc-400 hover:text-rose-400 border border-zinc-800 transition-colors"
-                    title="선택 말풍선 삭제"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
               </div>
             )}
 
             {/* 4. Text Options (Re-clickable & Re-movable text) */}
             {activeTool === 'text' && (
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap">
-                <button
-                  type="button"
-                  onClick={() => handleAddNewText()}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-semibold transition-colors border border-zinc-700 shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>텍스트 추가</span>
-                </button>
-
-                {activeText && (
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedId(null);
-                      setSelectedType(null);
-                      setEditingInlineId(null);
-                    }}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium transition-colors border border-zinc-700 shadow-xs"
-                    title="선택을 해제하여 완성 화면을 확인합니다 (캔버스 빈 공간 클릭으로도 해제)"
+                    onClick={() => handleAddNewText()}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-semibold transition-colors border border-zinc-700 shadow-xs"
                   >
-                    <Eye className="w-3.5 h-3.5 text-sky-400" />
-                    <span>완성 확인</span>
+                    <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>텍스트 추가</span>
                   </button>
-                )}
+
+                  {activeText && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedId(null);
+                        setSelectedType(null);
+                        setEditingInlineId(null);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-medium transition-colors border border-zinc-700 shadow-xs"
+                      title="선택을 해제하여 완성 화면을 확인합니다"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-sky-400" />
+                      <span>완성 확인</span>
+                    </button>
+                  )}
+
+                  {activeText && (
+                    <button
+                      type="button"
+                      onClick={deleteSelectedText}
+                      className="p-1.5 rounded-lg bg-zinc-950 hover:bg-rose-950/60 text-zinc-400 hover:text-rose-400 border border-zinc-800 transition-colors"
+                      title="선택 텍스트 삭제"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
 
                 {/* Text String Input */}
-                <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
+                <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800 flex-1 min-w-[140px] max-w-full sm:max-w-xs">
                   <input
                     type="text"
                     value={activeText ? activeText.text : defaultTextContent}
@@ -1591,13 +1610,13 @@ export function EditorModal({
                       updateSelectedText({ text: val });
                     }}
                     placeholder="강조 텍스트 입력"
-                    className="bg-transparent border-none text-white text-xs focus:outline-none w-32 sm:w-40 placeholder-zinc-500"
+                    className="bg-transparent border-none text-white text-xs focus:outline-none w-full placeholder-zinc-500"
                   />
                 </div>
 
                 {/* Font Size Slider */}
-                <div className="flex items-center gap-1.5 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
-                  <span className="text-zinc-400">크기:</span>
+                <div className="flex items-center gap-1 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800 shrink-0">
+                  <span className="text-zinc-400 text-[11px]">크기:</span>
                   <input
                     type="range"
                     min="16"
@@ -1609,7 +1628,7 @@ export function EditorModal({
                       setDefaultTextFontSize(val);
                       updateSelectedText({ fontSize: val });
                     }}
-                    className="w-16 accent-emerald-400 cursor-pointer"
+                    className="w-14 sm:w-16 accent-emerald-400 cursor-pointer"
                   />
                   <span className="text-[11px] font-mono text-zinc-300 w-5">
                     {activeText?.fontSize || defaultTextFontSize}
@@ -1617,7 +1636,8 @@ export function EditorModal({
                 </div>
 
                 {/* Text Color */}
-                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800 shrink-0">
+                  <span className="text-zinc-400 text-[11px] ml-1 mr-0.5">색상:</span>
                   {[
                     { label: '흰색', color: '#FFFFFF' },
                     { label: '노랑', color: '#FACC15' },
@@ -1632,7 +1652,7 @@ export function EditorModal({
                         setDefaultTextColor(c.color);
                         updateSelectedText({ color: c.color });
                       }}
-                      className={`w-3.5 h-3.5 rounded-full border transition-transform ${
+                      className={`w-4 h-4 rounded-full border transition-transform ${
                         (activeText?.color || defaultTextColor) === c.color
                           ? 'scale-125 border-white ring-1 ring-white'
                           : 'border-zinc-600 opacity-70 hover:opacity-100'
@@ -1644,7 +1664,7 @@ export function EditorModal({
                 </div>
 
                 {/* Background Badge Style */}
-                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800 flex-wrap">
                   {[
                     { id: 'dark' as const, label: '블랙 박스' },
                     { id: 'light' as const, label: '화이트 박스' },
@@ -1670,7 +1690,7 @@ export function EditorModal({
                 </div>
 
                 {/* Alignment */}
-                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800 shrink-0">
                   <button
                     type="button"
                     onClick={() => alignSelectedText('center')}
@@ -1696,37 +1716,27 @@ export function EditorModal({
                     하단
                   </button>
                 </div>
-
-                {/* Delete Text */}
-                {activeText && (
-                  <button
-                    type="button"
-                    onClick={deleteSelectedText}
-                    className="p-1.5 rounded-lg bg-zinc-950 hover:bg-rose-950/60 text-zinc-400 hover:text-rose-400 border border-zinc-800 transition-colors"
-                    title="선택 텍스트 삭제"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
               </div>
             )}
 
             {/* 5. Mosaic Options */}
             {activeTool === 'mosaic' && (
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-400">블록 크기:</span>
-                <input
-                  type="range"
-                  min="8"
-                  max="32"
-                  step="4"
-                  value={mosaicBlockSize}
-                  onChange={(e) => setMosaicBlockSize(parseInt(e.target.value, 10))}
-                  className="w-20 accent-amber-400 cursor-pointer"
-                />
-                <span className="text-[11px] font-mono text-zinc-300">{mosaicBlockSize}px</span>
-                <span className="text-[11px] text-amber-400/90 ml-2">
-                  가리고 싶은 영역을 드래그하면 즉시 적용됩니다.
+              <div className="flex flex-wrap items-center gap-2 w-full">
+                <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800 shrink-0">
+                  <span className="text-zinc-400 text-xs">블록 크기:</span>
+                  <input
+                    type="range"
+                    min="8"
+                    max="32"
+                    step="4"
+                    value={mosaicBlockSize}
+                    onChange={(e) => setMosaicBlockSize(parseInt(e.target.value, 10))}
+                    className="w-20 accent-amber-400 cursor-pointer"
+                  />
+                  <span className="text-[11px] font-mono text-zinc-300">{mosaicBlockSize}px</span>
+                </div>
+                <span className="text-[11px] text-amber-400/90">
+                  가리고 싶은 영역을 손가락이나 마우스로 드래그하면 모자이크가 적용됩니다.
                 </span>
               </div>
             )}
