@@ -122,7 +122,7 @@ export function WebImageExtractor({
 
   useEffect(() => {
     syncBookmarkletHref();
-  }, [syncBookmarkletHref]);
+  }, [syncBookmarkletHref, mode]);
 
   // Listen for Bookmarklet or PostMessage data transfer
   useEffect(() => {
@@ -581,36 +581,34 @@ export function WebImageExtractor({
 
         {/* Tab 2: Bookmarklet Mode (Chrome Extension alternative) */}
         {mode === 'bookmarklet' && (
-          <div className="mt-4 p-4 rounded-xl bg-zinc-950 border border-emerald-500/40 text-xs text-zinc-300 space-y-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded bg-emerald-500 text-white font-bold text-[11px]">
-                    확장프로그램 설치 불필요
-                  </span>
-                  <span className="font-bold text-white text-sm">
-                    크롬 확장프로그램과 100% 동일한 브라우저 직접 수집 기술
-                  </span>
-                </div>
-                <p className="text-zinc-400 text-xs">
-                  외부 봇 접근을 제한하는 웹페이지도 사용자가 보고 있는 브라우저 화면에서
-                  직접 고화질 이미지를 즉시 수집하여 본 화면으로 전송합니다.
-                </p>
+          <div className="mt-4 p-5 rounded-2xl bg-zinc-950 border border-emerald-500/40 text-xs text-zinc-300 space-y-4">
+            {/* Header / Hint */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                <h3 className="font-bold text-sm sm:text-base text-white">⚡ 북마크 하나로 모든 웹페이지 이미지 1초 추출</h3>
               </div>
+              <span className="text-[11px] text-zinc-400">
+                💡 북마크바가 안 보이면 키보드 <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 font-mono">Ctrl + Shift + B</kbd>
+              </span>
             </div>
 
-            {/* Step-by-step Bookmarklet drag & drop */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-              <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 flex flex-col justify-between gap-2">
-                <div className="space-y-1">
-                  <span className="text-emerald-400 font-bold block">1단계: 북마크바에 등록</span>
-                  <p className="text-zinc-400 text-[11px]">
-                    아래 버튼을 마우스로 끌어서 브라우저 상단 <strong>북마크바</strong>(Ctrl+Shift+B)에 놓으세요.
-                  </p>
+            {/* 2-Step Simple Layout */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 1단계: 북마크에 추가 */}
+              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-500 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                    1
+                  </span>
+                  <h4 className="font-bold text-sm text-white">북마크바에 추가하기</h4>
                 </div>
+                <p className="text-zinc-400 text-xs leading-relaxed">
+                  아래 녹색 버튼을 마우스로 잡고 브라우저 상단 <strong>북마크바</strong>로 끌어다 놓으세요.
+                </p>
 
-                <div className="pt-2 flex flex-wrap items-center gap-2">
-                  {/* Draggable bookmarklet link with native DOM ref to bypass React JSX URL sanitizer */}
+                <div className="pt-1 flex flex-wrap items-center gap-2">
+                  {/* Draggable bookmarklet link */}
                   <a
                     ref={bookmarkletAnchorRef}
                     href="#"
@@ -628,122 +626,82 @@ export function WebImageExtractor({
                     }}
                     onClick={(e) => {
                       e.preventDefault();
-                      // Allow direct in-tab testing if clicked!
                       try {
                         const script = bookmarkletCode.replace('javascript:', '');
                         new Function(script)();
                       } catch (err: any) {
-                        alert('테스트 실행: ' + err.message);
+                        alert('실행 테스트: ' + err.message);
                       }
                     }}
-                    className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs shadow-lg cursor-grab active:cursor-grabbing border border-emerald-400"
-                    title="북마크바로 드래그하거나, 클릭해서 현재 화면에서 바로 테스트하세요"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md cursor-grab active:cursor-grabbing border border-emerald-400 transition-colors"
+                    title="이 버튼을 브라우저 북마크바로 끌어다 놓으세요"
                   >
                     <Bookmark className="w-4 h-4 fill-white" />
-                    <span>⚡ 이미지 일괄 추출기 (드래그)</span>
+                    <span>⚡ 이미지 추출기 (여기를 드래그)</span>
                   </a>
 
                   <button
                     type="button"
                     onClick={handleCopyBookmarklet}
-                    className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all shadow-sm ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border ${
                       copiedBookmarklet
-                        ? 'bg-emerald-600 text-white ring-2 ring-emerald-400'
-                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white border border-zinc-700'
+                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border-zinc-700'
                     }`}
-                    title="북마크 URL 주소 복사"
+                    title="북마크 주소 복사"
                   >
                     {copiedBookmarklet ? (
                       <>
                         <Check className="w-3.5 h-3.5 text-emerald-200" />
-                        <span>✓ 복사 완료!</span>
+                        <span>복사 완료!</span>
                       </>
                     ) : (
                       <>
                         <Copy className="w-3.5 h-3.5" />
-                        <span>코드 복사 (추천)</span>
+                        <span>코드 복사</span>
                       </>
                     )}
                   </button>
                 </div>
 
-                {/* 10-second manual setup guide */}
-                <div className="mt-2 p-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-300 space-y-1.5">
-                  <div className="flex items-center justify-between text-zinc-400 font-medium">
-                    <span className="text-emerald-400 font-bold flex items-center gap-1">
-                      <Bookmark className="w-3 h-3" />
-                      초간단 수동 등록 방법 (가장 확실함)
-                    </span>
-                    {copiedBookmarklet && (
-                      <span className="text-emerald-400 text-[10px] font-bold">클립보드 복사됨!</span>
-                    )}
-                  </div>
-                  <ol className="list-decimal list-inside space-y-0.5 text-[10px] text-zinc-400 pl-0.5">
-                    <li>위 <strong className="text-zinc-200">[코드 복사 (추천)]</strong> 버튼을 클릭합니다.</li>
-                    <li>크롬 브라우저 상단 북마크바 빈 곳 우클릭 ➔ <strong>[페이지 추가]</strong> 클릭</li>
-                    <li>이름에 <strong className="text-white">이미지 추출기</strong>, URL에 <strong className="text-emerald-400">Ctrl+V (붙여넣기)</strong> 후 <strong>[저장]</strong></li>
-                  </ol>
-                </div>
+                <p className="text-[11px] text-zinc-500 leading-normal">
+                  * 드래그가 잘 안 되시면 <button type="button" onClick={handleCopyBookmarklet} className="text-emerald-400 underline font-medium hover:text-emerald-300">[코드 복사]</button> 후 북마크바 빈 곳 우클릭 ➔ [페이지 추가]에서 URL에 붙여넣기 하셔도 됩니다.
+                </p>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1.5">
-                <span className="text-emerald-400 font-bold block">2단계: 해당 웹페이지에서 클릭</span>
-                <p className="text-zinc-400 text-[11px]">
-                  추출하려는 웹페이지에서 <strong>스크롤을 살짝 내린 후</strong> 북마크를 클릭하세요.
+              {/* 2단계: 원하는 페이지에서 클릭 */}
+              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-500 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                    2
+                  </span>
+                  <h4 className="font-bold text-sm text-white">원하는 페이지에서 북마크 클릭!</h4>
+                </div>
+                <p className="text-zinc-400 text-xs leading-relaxed">
+                  쿠팡, 스마트스토어, 알리익스프레스 등 추출하고 싶은 사이트에서 <strong>북마크를 누르세요.</strong>
                 </p>
-                <div className="p-2 rounded-lg bg-zinc-950/80 border border-zinc-800 text-[11px] text-zinc-300 space-y-1">
-                  <div className="flex items-center gap-1.5 text-emerald-400 font-semibold">
-                    <MousePointerClick className="w-3.5 h-3.5" />
-                    <span>화면 우측 하단 플로팅 창 표시</span>
+
+                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800/80 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-xs">
+                    <Check className="w-3.5 h-3.5" />
+                    <span>화면 가운데에 팝업창이 즉시 열립니다!</span>
                   </div>
-                  <p className="text-zinc-400 text-[10px] leading-relaxed">
-                    페이지 위에 고화질 사진 미리보기와 [최적화기 전송] 버튼이 즉시 나타납니다.
+                  <p className="text-zinc-400 text-[11px] leading-relaxed">
+                    팝업창에서 <strong>[🚀 최적화기에서 열기]</strong>를 누르면 모든 고화질 이미지를 ZIP 파일로 일괄 다운로드할 수 있습니다.
                   </p>
                 </div>
-              </div>
 
-              <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2">
-                <span className="text-emerald-400 font-bold block">3단계: 자동 수신 & ZIP 다운로드</span>
-                <p className="text-zinc-400 text-[11px]">
-                  스튜디오 고화질 원본으로 변환된 모든 사진이 즉시 전송되며 한 번에 압축 저장됩니다.
-                </p>
-                <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-mono">
-                  <Check className="w-3.5 h-3.5" />
-                  <span>실시간 데이터 수신 대기 중</span>
-                </div>
-
-                <div className="pt-1 border-t border-zinc-800/80">
+                <div className="pt-1 flex items-center justify-between text-[11px] text-zinc-500">
+                  <span>* 본문으로 스크롤을 살짝 내린 후 북마크를 눌러주세요.</span>
                   <button
                     type="button"
                     onClick={() => setMode('html')}
-                    className="w-full text-left text-[11px] text-amber-400 hover:text-amber-300 font-medium hover:underline flex items-center gap-1"
+                    className="text-amber-400 hover:text-amber-300 hover:underline font-medium"
                   >
-                    <span>💡 북마크가 번거로우시면? [HTML 소스 복사] 탭 이용 ➔</span>
+                    HTML 소스 복사 ➔
                   </button>
                 </div>
               </div>
-            </div>
-
-            {/* Troubleshooting Alert Box */}
-            <div className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200/90 space-y-1">
-              <div className="font-bold flex items-center gap-1.5 text-amber-400">
-                <AlertCircle className="w-4 h-4" />
-                <span>북마크를 눌러도 반응이 없거나 에러가 뜨는 경우:</span>
-              </div>
-              <ul className="list-disc list-inside space-y-1 text-[11px] text-zinc-300 pl-1">
-                <li className="text-amber-300/90 font-medium">
-                  <strong>"React has blocked a javascript: URL..." 에러가 떴던 경우:</strong>
-                  <span className="text-zinc-300 font-normal pl-4 block">
-                    기존에 브라우저에 등록하셨던 북마크를 <strong>우클릭 ➔ 삭제</strong>하시고, 위 녹색 버튼을 다시 드래그하시거나 <strong>[코드 복사 (추천)]</strong>를 눌러 북마크에 [페이지 추가]를 해주시면 정상 작동합니다!
-                  </span>
-                </li>
-                <li>
-                  <strong>스크롤 로딩:</strong> 페이지 스크롤을 살짝 내려 상세 이미지가 화면에 로드된 후 북마크를 누르면 모든 고화질 컷이 완벽하게 추출됩니다.
-                </li>
-                <li>
-                  <strong>가장 확실하고 빠른 대안:</strong> 해당 웹페이지에서 <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-white">Ctrl + U</kbd> 누르고 전체 복사(<kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-white">Ctrl+A</kbd>, <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-white">Ctrl+C</kbd>)하여 <strong>[HTML 소스 직접 분석]</strong> 탭에 넣으시면 <strong>100% 즉시 추출</strong>됩니다!
-                </li>
-              </ul>
             </div>
           </div>
         )}

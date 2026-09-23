@@ -430,203 +430,162 @@ export async function downloadExtractedImagesAsZip(
 }
 
 /**
- * Generates bookmarklet JavaScript string that works in Chrome, Whale, Edge, Safari
- * Injects a floating in-page toolbar on Coupang, Naver, AliExpress, etc.
+ * Generates bookmarklet JavaScript string that works reliably in Chrome, Whale, Edge, Safari
+ * Displays a centered in-page modal dialog directly on the target website
  */
 export function generateBookmarkletCode(appUrl: string): string {
-  const runner = function (TARGET_APP_URL: string) {
-    try {
-      const existing = document.getElementById('ais-bulk-overlay');
-      if (existing) existing.remove();
+  const serializedAppUrl = JSON.stringify(appUrl);
 
-      const urls: string[] = [];
-      const seen: Record<string, boolean> = {};
-
-      const add = (u: any) => {
-        if (!u || typeof u !== 'string') return;
-        let trimmed = u.trim();
-        if (trimmed.indexOf('http') !== 0) return;
-        if (
-          trimmed.indexOf('1x1') !== -1 ||
-          trimmed.indexOf('pixel') !== -1 ||
-          trimmed.indexOf('spacer') !== -1 ||
-          trimmed.indexOf('blank.gif') !== -1
-        ) {
-          return;
-        }
-
-        // Coupang high-res upgrade
-        if (trimmed.indexOf('coupangcdn.com') !== -1) {
-          trimmed = trimmed
-            .replace(/\/thumbnails\/remote\/\d+x\d+ex\//, '/')
-            .replace(/\/thumbnails\/remote\/q\d+\//, '/')
-            .replace(/\?q=\d+$/, '');
-        }
-        // Naver SmartStore / Shopping high-res upgrade
-        if (trimmed.indexOf('pstatic.net') !== -1 && trimmed.indexOf('?type=') !== -1) {
-          trimmed = trimmed.replace(/\?type=[a-zA-Z0-9_-]+/, '?type=o');
-        }
-        // AliExpress high-res upgrade
-        if (trimmed.indexOf('alicdn.com') !== -1) {
-          trimmed = trimmed
-            .replace(/_\d+x\d+\.(?:jpg|png|webp)/g, '')
-            .replace(/_\.(?:webp|jpg)$/g, '')
-            .replace(/_Q\d+\.jpg$/g, '');
-        }
-
-        if (!seen[trimmed]) {
-          seen[trimmed] = true;
-          urls.push(trimmed);
-        }
-      };
-
-      // 1. img tags (including lazy attributes)
-      const imgs = document.querySelectorAll('img');
-      for (let i = 0; i < imgs.length; i++) {
-        const img = imgs[i];
-        add(img.src);
-        add(img.getAttribute('data-src'));
-        add(img.getAttribute('data-original'));
-        add(img.getAttribute('data-lazy-src'));
-        add(img.getAttribute('data-actualsrc'));
-        const srcset = img.getAttribute('srcset');
-        if (srcset) {
-          const parts = srcset.split(',');
-          for (let j = 0; j < parts.length; j++) {
-            add(parts[j].trim().split(/\s+/)[0]);
-          }
-        }
+  const scriptBody = `
+(function(APP_URL){
+  try {
+    var oldB = document.getElementById("ais-bdrop"); if (oldB) oldB.remove();
+    var oldM = document.getElementById("ais-modal"); if (oldM) oldM.remove();
+    var urls = []; var seen = {};
+    function add(u) {
+      if (!u || typeof u !== "string") return;
+      var t = u.trim();
+      if (!t || (t.indexOf("data:image") === 0 && t.length < 500)) return;
+      if (t.indexOf("//") === 0) { t = location.protocol + t; }
+      else if (t.indexOf("/") === 0) { t = location.origin + t; }
+      if (t.indexOf("http") !== 0) return;
+      if (t.indexOf("1x1") !== -1 || t.indexOf("pixel") !== -1 || t.indexOf("spacer") !== -1 || t.indexOf("blank.gif") !== -1) return;
+      if (t.indexOf("coupangcdn.com") !== -1) {
+        t = t.replace(/\\/thumbnails\\/remote\\/\\d+x\\d+ex\\//, "/").replace(/\\/thumbnails\\/remote\\/q\\d+\\//, "/").replace(/\\?q=\\d+$/, "");
       }
-
-      // 2. Computed background images
-      const allEls = document.querySelectorAll('*');
-      for (let e = 0; e < Math.min(allEls.length, 600); e++) {
-        const bg = window.getComputedStyle(allEls[e]).backgroundImage;
-        if (bg && bg.indexOf('url(') !== -1) {
-          const m = bg.match(/url\(["']?([^"')]+)["']?\)/);
-          if (m && m[1]) add(m[1]);
-        }
+      if (t.indexOf("pstatic.net") !== -1 && t.indexOf("?type=") !== -1) {
+        t = t.replace(/\\?type=[a-zA-Z0-9_-]+/, "?type=o");
       }
-
-      // 3. Scripts JSON scan (Coupang, Naver, AliExpress embedded product data)
-      const scripts = document.querySelectorAll('script');
-      const regex = new RegExp('https?:\\/\\/[^\\s"\'<>]+?\\.(?:jpg|jpeg|png|webp)', 'gi');
-      for (let s = 0; s < scripts.length; s++) {
-        const txt = scripts[s].textContent || '';
-        if (
-          txt.length > 30 &&
-          (txt.indexOf('cdn') !== -1 ||
-            txt.indexOf('jpg') !== -1 ||
-            txt.indexOf('image') !== -1 ||
-            txt.indexOf('photo') !== -1 ||
-            txt.indexOf('pstatic') !== -1)
-        ) {
-          let match: RegExpExecArray | null;
-          while ((match = regex.exec(txt)) !== null) {
-            add(match[0].split('\\').join(''));
-          }
-        }
+      if (t.indexOf("alicdn.com") !== -1) {
+        t = t.replace(/_\\d+x\\d+\\.(?:jpg|png|webp)/g, "").replace(/_\\.(?:webp|jpg)$/g, "").replace(/_Q\\d+\\.jpg$/g, "");
       }
-
-      if (urls.length === 0) {
-        alert('현재 페이지에서 이미지를 발견하지 못했습니다. 페이지 스크롤을 살짝 내린 후 다시 눌러주세요.');
-        return;
-      }
-
-      // Build In-Page Floating UI Overlay
-      const wrap = document.createElement('div');
-      wrap.id = 'ais-bulk-overlay';
-      wrap.style.cssText =
-        'position:fixed;bottom:24px;right:24px;width:380px;max-width:calc(100vw - 48px);max-height:85vh;background:#18181b;color:#ffffff;border-radius:18px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.15);z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;display:flex;flex-direction:column;overflow:hidden;';
-
-      const header = document.createElement('div');
-      header.style.cssText =
-        'padding:14px 16px;background:#09090b;border-bottom:1px solid #27272a;display:flex;align-items:center;justify-content:space-between;';
-      header.innerHTML =
-        '<div style="display:flex;align-items:center;gap:8px;"><span style="background:#10b981;color:#fff;font-weight:800;font-size:11px;padding:3px 7px;border-radius:6px;">성공</span><span style="font-weight:700;font-size:13px;">이미지 <strong style="color:#34d399;">' +
-        urls.length +
-        '개</strong> 발견!</span></div><button id="ais-btn-close" style="background:none;border:none;color:#a1a1aa;cursor:pointer;font-size:18px;padding:2px 6px;line-height:1;">✕</button>';
-      wrap.appendChild(header);
-
-      const grid = document.createElement('div');
-      grid.style.cssText =
-        'padding:12px;overflow-y:auto;max-height:240px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;background:#18181b;';
-      for (let k = 0; k < Math.min(urls.length, 30); k++) {
-        const item = document.createElement('div');
-        item.style.cssText =
-          'aspect-ratio:1;border-radius:8px;overflow:hidden;background:#27272a;border:1px solid #3f3f46;';
-        const m = document.createElement('img');
-        m.src = urls[k];
-        m.style.cssText = 'width:100%;height:100%;object-fit:cover;';
-        m.setAttribute('referrerpolicy', 'no-referrer');
-        item.appendChild(m);
-        grid.appendChild(item);
-      }
-      wrap.appendChild(grid);
-
-      const actions = document.createElement('div');
-      actions.style.cssText =
-        'padding:12px;background:#09090b;border-top:1px solid #27272a;display:flex;flex-direction:column;gap:8px;';
-
-      const btnOpen = document.createElement('button');
-      btnOpen.style.cssText =
-        'width:100%;padding:10px 14px;background:#10b981;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;';
-      btnOpen.innerHTML = '🚀 최적화기에서 열기 & ZIP 다운로드';
-      btnOpen.onclick = function () {
-        const win = window.open(TARGET_APP_URL + '?mode=extractor&source=bookmarklet', '_blank');
-        if (win) {
-          let c = 0;
-          const t = setInterval(function () {
-            c++;
-            win.postMessage(
-              {
-                type: 'AIS_IMAGES_TRANSFER',
-                payload: { title: document.title, pageUrl: location.href, images: urls },
-              },
-              '*'
-            );
-            if (c > 25) clearInterval(t);
-          }, 600);
-        } else {
-          alert('브라우저의 팝업 차단을 허용해주세요.');
-        }
-      };
-      actions.appendChild(btnOpen);
-
-      const btnCopy = document.createElement('button');
-      btnCopy.style.cssText =
-        'width:100%;padding:8px 12px;background:#27272a;color:#e4e4e7;border:1px solid #3f3f46;border-radius:10px;font-weight:600;font-size:12px;cursor:pointer;';
-      btnCopy.innerHTML = '📋 전체 이미지 주소 복사 (' + urls.length + '개)';
-      btnCopy.onclick = function () {
-        navigator.clipboard
-          .writeText(urls.join('\n'))
-          .then(function () {
-            btnCopy.innerHTML = '✓ 복사 완료! (최적화기에 붙여넣기 가능)';
-            btnCopy.style.background = '#059669';
-            setTimeout(function () {
-              btnCopy.innerHTML = '📋 전체 이미지 주소 복사 (' + urls.length + '개)';
-              btnCopy.style.background = '#27272a';
-            }, 2000);
-          })
-          .catch(function () {
-            prompt('Ctrl+C를 눌러 복사하세요:', urls.join('\n'));
-          });
-      };
-      actions.appendChild(btnCopy);
-
-      wrap.appendChild(actions);
-      document.body.appendChild(wrap);
-
-      const closeBtn = document.getElementById('ais-btn-close');
-      if (closeBtn) {
-        closeBtn.onclick = function () {
-          wrap.remove();
-        };
-      }
-    } catch (err: any) {
-      alert('이미지 추출 오류: ' + (err ? err.message : '알 수 없는 오류'));
+      if (!seen[t]) { seen[t] = true; urls.push(t); }
     }
-  };
+    var imgs = document.querySelectorAll("img, picture source, [data-src], [data-original], [data-zoom-image], [data-lazy-src], [data-actualsrc]");
+    for (var i = 0; i < imgs.length; i++) {
+      var el = imgs[i];
+      add(el.currentSrc); add(el.src);
+      add(el.getAttribute("data-src")); add(el.getAttribute("data-original"));
+      add(el.getAttribute("data-zoom-image")); add(el.getAttribute("data-lazy-src"));
+      add(el.getAttribute("data-large-img")); add(el.getAttribute("data-high-res-img"));
+      add(el.getAttribute("data-actualsrc")); add(el.getAttribute("data-img-url"));
+      add(el.getAttribute("data-big"));
+      var ss = el.getAttribute("srcset");
+      if (ss) { var p = ss.split(","); for (var j = 0; j < p.length; j++) { add(p[j].trim().split(/\\s+/)[0]); } }
+    }
+    var allEls = document.querySelectorAll("*");
+    for (var e = 0; e < Math.min(allEls.length, 250); e++) {
+      var bg = window.getComputedStyle(allEls[e]).backgroundImage;
+      if (bg && bg.indexOf("url(") !== -1) {
+        var match = bg.match(/url\\(["']?([^"')]+)["']?\\)/);
+        if (match && match[1]) add(match[1]);
+      }
+    }
+    var scripts = document.querySelectorAll("script");
+    var reg = /(?:https?:)?\\/\\/[^\\s"'<>]+\\.(?:jpg|jpeg|png|webp|avif)/gi;
+    for (var s = 0; s < scripts.length; s++) {
+      var txt = scripts[s].textContent || "";
+      if (txt.length > 30 && (txt.indexOf("cdn") !== -1 || txt.indexOf("jpg") !== -1 || txt.indexOf("image") !== -1 || txt.indexOf("pstatic") !== -1)) {
+        var m2; while ((m2 = reg.exec(txt)) !== null) { add(m2[0]); }
+      }
+    }
 
-  return 'javascript:(' + runner.toString() + ')(' + JSON.stringify(appUrl) + ');';
+    var bd = document.createElement("div");
+    bd.id = "ais-bdrop";
+    bd.style.cssText = "position:fixed!important;inset:0!important;background:rgba(0,0,0,0.65)!important;backdrop-filter:blur(3px)!important;z-index:2147483646!important;";
+    document.body.appendChild(bd);
+
+    var modal = document.createElement("div");
+    modal.id = "ais-modal";
+    modal.style.cssText = "position:fixed!important;top:50%!important;left:50%!important;transform:translate(-50%,-50%)!important;width:min(480px,calc(100vw - 32px))!important;max-height:85vh!important;background:#18181b!important;color:#ffffff!important;border-radius:20px!important;box-shadow:0 25px 50px rgba(0,0,0,0.8),0 0 0 1px rgba(255,255,255,0.15)!important;z-index:2147483647!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif!important;";
+
+    function closeAll() {
+      if (bd) bd.remove();
+      if (modal) modal.remove();
+    }
+    bd.onclick = closeAll;
+
+    if (urls.length === 0) {
+      modal.innerHTML = '<div style="padding:24px 20px;text-align:center;display:flex;flex-direction:column;gap:12px;"><div style="font-size:32px;">⚠️</div><h3 style="font-weight:700;font-size:16px;margin:0;color:#fff;">이미지를 발견하지 못했습니다</h3><p style="font-size:12px;color:#a1a1aa;margin:0;line-height:1.6;">현재 화면에 표시된 이미지가 없습니다.<br>본문이나 상품 상세 설명 쪽으로 스크롤을 살짝 내린 후<br>북마크를 다시 클릭해주세요!</p><button id="ais-cbtn" style="margin-top:8px;padding:10px 16px;background:#27272a;color:#fff;border:1px solid #3f3f46;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;">확인</button></div>';
+      document.body.appendChild(modal);
+      var cbtn0 = document.getElementById("ais-cbtn");
+      if (cbtn0) cbtn0.onclick = closeAll;
+      return;
+    }
+
+    var head = document.createElement("div");
+    head.style.cssText = "padding:16px 20px!important;background:#09090b!important;border-bottom:1px solid #27272a!important;display:flex!important;align-items:center!important;justify-content:space-between!important;";
+    head.innerHTML = '<div style="display:flex;align-items:center;gap:10px;"><span style="background:#10b981;color:#fff;font-weight:800;font-size:11px;padding:3px 8px;border-radius:6px;">추출 성공</span><span style="font-weight:700;font-size:14px;">이미지 <strong style="color:#34d399;">' + urls.length + '개</strong> 발견</span></div><button id="ais-cbtn" style="background:#27272a;border:none;color:#a1a1aa;cursor:pointer;font-size:16px;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>';
+    modal.appendChild(head);
+
+    var grid = document.createElement("div");
+    grid.style.cssText = "padding:12px!important;overflow-y:auto!important;max-height:220px!important;display:grid!important;grid-template-columns:repeat(4,1fr)!important;gap:8px!important;background:#121215!important;";
+    for (var k = 0; k < Math.min(urls.length, 24); k++) {
+      var box = document.createElement("div");
+      box.style.cssText = "aspect-ratio:1!important;border-radius:8px!important;overflow:hidden!important;background:#27272a!important;border:1px solid #3f3f46!important;";
+      var im = document.createElement("img");
+      im.src = urls[k];
+      im.style.cssText = "width:100%!important;height:100%!important;object-fit:cover!important;";
+      im.setAttribute("referrerpolicy", "no-referrer");
+      box.appendChild(im);
+      grid.appendChild(box);
+    }
+    modal.appendChild(grid);
+
+    var acts = document.createElement("div");
+    acts.style.cssText = "padding:14px 20px!important;background:#09090b!important;border-top:1px solid #27272a!important;display:flex!important;flex-direction:column!important;gap:10px!important;";
+
+    var btnOpen = document.createElement("button");
+    btnOpen.style.cssText = "width:100%!important;padding:12px 16px!important;background:#10b981!important;color:#fff!important;border:none!important;border-radius:12px!important;font-weight:700!important;font-size:13px!important;cursor:pointer!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;box-shadow:0 4px 12px rgba(16,185,129,0.3)!important;";
+    btnOpen.innerHTML = "🚀 이미지 일괄 다운로드 (최적화기에서 열기)";
+    btnOpen.onclick = function() {
+      try { navigator.clipboard.writeText(urls.join("\\n")); } catch(e) {}
+      var targetUrl = APP_URL + "?mode=extractor&source=bookmarklet";
+      var win = window.open(targetUrl, "_blank");
+      if (win) {
+        var cnt = 0;
+        var tmr = setInterval(function() {
+          cnt++;
+          win.postMessage({
+            type: "AIS_IMAGES_TRANSFER",
+            payload: { title: document.title, pageUrl: location.href, images: urls }
+          }, "*");
+          if (cnt > 30) clearInterval(tmr);
+        }, 400);
+        btnOpen.innerHTML = "✓ 전송 완료! 새 탭을 확인하세요";
+      } else {
+        alert("브라우저 팝업이 차단되었습니다. 주소창 우측에서 팝업 허용을 눌러주세요!");
+      }
+    };
+    acts.appendChild(btnOpen);
+
+    var btnCopy = document.createElement("button");
+    btnCopy.style.cssText = "width:100%!important;padding:9px 14px!important;background:#27272a!important;color:#e4e4e7!important;border:1px solid #3f3f46!important;border-radius:10px!important;font-weight:600!important;font-size:12px!important;cursor:pointer!important;";
+    btnCopy.innerHTML = "📋 이미지 주소 전체 복사 (" + urls.length + "개)";
+    btnCopy.onclick = function() {
+      navigator.clipboard.writeText(urls.join("\\n")).then(function() {
+        btnCopy.innerHTML = "✓ 클립보드 복사 완료!";
+        btnCopy.style.background = "#059669";
+        setTimeout(function() {
+          btnCopy.innerHTML = "📋 이미지 주소 전체 복사 (" + urls.length + "개)";
+          btnCopy.style.background = "#27272a";
+        }, 2000);
+      }).catch(function() {
+        prompt("Ctrl+C를 눌러 복사하세요:", urls.join("\\n"));
+      });
+    };
+    acts.appendChild(btnCopy);
+    modal.appendChild(acts);
+
+    document.body.appendChild(modal);
+
+    var cbtn = document.getElementById("ais-cbtn");
+    if (cbtn) cbtn.onclick = closeAll;
+  } catch(err) {
+    alert("이미지 추출 오류: " + (err ? err.message : "알 수 없는 오류"));
+  }
+})(${serializedAppUrl});
+`.replace(/\\n\\s*/g, ' ').trim();
+
+  return 'javascript:' + scriptBody;
 }
