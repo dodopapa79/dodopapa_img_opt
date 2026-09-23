@@ -192,3 +192,34 @@ export interface EditorStateSnapshot {
   texts: EditorText[];
   mosaics: EditorMosaic[];
 }
+
+// -------------------------------------------------------------
+// Web Page Image Extractor Types
+// -------------------------------------------------------------
+export interface ExtractedImageItem {
+  id: string;
+  url: string;
+  originalUrl?: string;
+  previewUrl: string;
+  alt: string;
+  format: string; // 'jpg' | 'png' | 'webp' | 'gif' | 'svg' | 'unknown'
+  type: 'og:image' | 'img' | 'background' | 'picture' | 'link' | 'product' | 'detail';
+  sourceMall?: 'coupang' | 'naver' | 'aliexpress' | 'general';
+  isHighRes?: boolean;
+  width?: number;
+  height?: number;
+  sizeBytes?: number;
+  selected?: boolean;
+}
+
+export interface ExtractionResult {
+  success: boolean;
+  pageTitle: string;
+  pageUrl: string;
+  favicon?: string;
+  images: ExtractedImageItem[];
+  totalCount: number;
+  isProtectedShoppingSite?: boolean;
+  siteName?: string;
+  error?: string;
+}

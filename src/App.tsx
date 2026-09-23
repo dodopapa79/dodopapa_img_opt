@@ -6,6 +6,7 @@ import { ImageList } from './components/ImageList';
 import { EditorModal } from './components/EditorModal';
 import { DownloadSummaryBar } from './components/DownloadSummaryBar';
 import { ThumbnailMaker } from './components/ThumbnailMaker';
+import { WebImageExtractor } from './components/WebImageExtractor';
 import { OptimizationSettings, OptimizedImageItem, AspectRatioOption, WatermarkConfig } from './types';
 import {
   processAndOptimizeImage,
@@ -16,7 +17,7 @@ import {
   stripImageMetadata,
 } from './utils/imageProcessor';
 import { createSampleImages } from './utils/sampleImages';
-import { CheckCircle2, ShieldCheck, Zap, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { CheckCircle2, ShieldCheck, Zap, Image as ImageIcon, Sparkles, Globe } from 'lucide-react';
 import { APP_VERSION } from './version';
 
 const WATERMARK_STORAGE_KEY = 'blog_optimizer_watermark_settings_v1';
@@ -67,7 +68,7 @@ const DEFAULT_SETTINGS: OptimizationSettings = {
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'optimizer' | 'thumbnail'>('optimizer');
+  const [activeTab, setActiveTab] = useState<'optimizer' | 'thumbnail' | 'extractor'>('optimizer');
   const [settings, setSettings] = useState<OptimizationSettings>(DEFAULT_SETTINGS);
   const [images, setImages] = useState<OptimizedImageItem[]>([]);
   const [editingImage, setEditingImage] = useState<OptimizedImageItem | null>(null);
@@ -340,6 +341,19 @@ export default function App() {
           >
             <Sparkles className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'thumbnail' ? 'text-amber-400' : 'text-zinc-400'}`} />
             <span>블로그 썸네일 제작기</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('extractor')}
+            className={`inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap shrink-0 ${
+              activeTab === 'extractor'
+                ? 'bg-black text-white shadow-sm'
+                : 'bg-white text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200'
+            }`}
+          >
+            <Globe className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'extractor' ? 'text-emerald-400' : 'text-zinc-400'}`} />
+            <span>웹페이지 이미지 추출기</span>
             <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-emerald-500 text-white leading-none">
               NEW
             </span>
@@ -348,6 +362,13 @@ export default function App() {
 
         {activeTab === 'thumbnail' ? (
           <ThumbnailMaker />
+        ) : activeTab === 'extractor' ? (
+          <WebImageExtractor
+            onSendToOptimizer={(files) => {
+              handleFilesSelected(files);
+              setActiveTab('optimizer');
+            }}
+          />
         ) : (
           <>
             {/* Intro banner / Trust badges */}
