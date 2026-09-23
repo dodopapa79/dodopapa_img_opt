@@ -436,11 +436,19 @@ export async function downloadExtractedImagesAsZip(
 export function generateBookmarkletCode(appUrl: string): string {
   const serializedAppUrl = JSON.stringify(appUrl);
 
-  const scriptBody = `
+  const scriptBody = String.raw`
 (function(APP_URL){
   try {
     var oldB = document.getElementById("ais-bdrop"); if (oldB) oldB.remove();
     var oldM = document.getElementById("ais-modal"); if (oldM) oldM.remove();
+    var oldTip = document.getElementById("ais-toast"); if (oldTip) oldTip.remove();
+
+    var tip = document.createElement("div");
+    tip.id = "ais-toast";
+    tip.style.cssText = "position:fixed!important;top:20px!important;left:50%!important;transform:translateX(-50%)!important;background:#10b981!important;color:#ffffff!important;padding:10px 20px!important;border-radius:30px!important;font-size:13px!important;font-weight:700!important;z-index:2147483647!important;box-shadow:0 10px 25px rgba(0,0,0,0.5)!important;font-family:-apple-system,BlinkMacSystemFont,sans-serif!important;";
+    tip.innerText = "🔍 이미지 수집 중...";
+    document.body.appendChild(tip);
+
     var urls = []; var seen = {};
     function add(u) {
       if (!u || typeof u !== "string") return;
@@ -451,13 +459,13 @@ export function generateBookmarkletCode(appUrl: string): string {
       if (t.indexOf("http") !== 0) return;
       if (t.indexOf("1x1") !== -1 || t.indexOf("pixel") !== -1 || t.indexOf("spacer") !== -1 || t.indexOf("blank.gif") !== -1) return;
       if (t.indexOf("coupangcdn.com") !== -1) {
-        t = t.replace(/\\/thumbnails\\/remote\\/\\d+x\\d+ex\\//, "/").replace(/\\/thumbnails\\/remote\\/q\\d+\\//, "/").replace(/\\?q=\\d+$/, "");
+        t = t.replace(/\/thumbnails\/remote\/\d+x\d+ex\//, "/").replace(/\/thumbnails\/remote\/q\d+\//, "/").replace(/\?q=\d+$/, "");
       }
       if (t.indexOf("pstatic.net") !== -1 && t.indexOf("?type=") !== -1) {
-        t = t.replace(/\\?type=[a-zA-Z0-9_-]+/, "?type=o");
+        t = t.replace(/\?type=[a-zA-Z0-9_-]+/, "?type=o");
       }
       if (t.indexOf("alicdn.com") !== -1) {
-        t = t.replace(/_\\d+x\\d+\\.(?:jpg|png|webp)/g, "").replace(/_\\.(?:webp|jpg)$/g, "").replace(/_Q\\d+\\.jpg$/g, "");
+        t = t.replace(/_\d+x\d+\.(?:jpg|png|webp)/g, "").replace(/_\.(?:webp|jpg)$/g, "").replace(/_Q\d+\.jpg$/g, "");
       }
       if (!seen[t]) { seen[t] = true; urls.push(t); }
     }
@@ -471,24 +479,26 @@ export function generateBookmarkletCode(appUrl: string): string {
       add(el.getAttribute("data-actualsrc")); add(el.getAttribute("data-img-url"));
       add(el.getAttribute("data-big"));
       var ss = el.getAttribute("srcset");
-      if (ss) { var p = ss.split(","); for (var j = 0; j < p.length; j++) { add(p[j].trim().split(/\\s+/)[0]); } }
+      if (ss) { var p = ss.split(","); for (var j = 0; j < p.length; j++) { add(p[j].trim().split(/\s+/)[0]); } }
     }
     var allEls = document.querySelectorAll("*");
-    for (var e = 0; e < Math.min(allEls.length, 250); e++) {
+    for (var e = 0; e < Math.min(allEls.length, 300); e++) {
       var bg = window.getComputedStyle(allEls[e]).backgroundImage;
       if (bg && bg.indexOf("url(") !== -1) {
-        var match = bg.match(/url\\(["']?([^"')]+)["']?\\)/);
+        var match = bg.match(/url\(["']?([^"')]+)["']?\)/);
         if (match && match[1]) add(match[1]);
       }
     }
     var scripts = document.querySelectorAll("script");
-    var reg = /(?:https?:)?\\/\\/[^\\s"'<>]+\\.(?:jpg|jpeg|png|webp|avif)/gi;
+    var reg = /(?:https?:)?\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp|avif)/gi;
     for (var s = 0; s < scripts.length; s++) {
       var txt = scripts[s].textContent || "";
       if (txt.length > 30 && (txt.indexOf("cdn") !== -1 || txt.indexOf("jpg") !== -1 || txt.indexOf("image") !== -1 || txt.indexOf("pstatic") !== -1)) {
         var m2; while ((m2 = reg.exec(txt)) !== null) { add(m2[0]); }
       }
     }
+
+    if (tip) tip.remove();
 
     var bd = document.createElement("div");
     bd.id = "ais-bdrop";
@@ -584,8 +594,11 @@ export function generateBookmarkletCode(appUrl: string): string {
   } catch(err) {
     alert("이미지 추출 오류: " + (err ? err.message : "알 수 없는 오류"));
   }
-})(${serializedAppUrl});
-`.replace(/\\n\\s*/g, ' ').trim();
+})`
+    .split(/[\r\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(' ');
 
-  return 'javascript:' + scriptBody;
+  return 'javascript:' + scriptBody + '(' + serializedAppUrl + ');';
 }

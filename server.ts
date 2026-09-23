@@ -351,19 +351,19 @@ async function startServer() {
 
       clearTimeout(timeoutId);
 
-      // Detect Akamai / WAF / Bot blocking on Coupang, Naver, AliExpress
+      // Detect WAF / Bot blocking / HTTP error on any protected webpage
       if (
         !response.ok ||
         (isNaver && response.url.includes('internal-error.html')) ||
         (isCoupang && response.status === 403)
       ) {
-        if (isCoupang || isNaver || isAli) {
+        if (response.status === 403 || response.status === 429 || response.status === 401 || isCoupang || isNaver || isAli) {
           res.json({
             success: false,
             isProtectedShoppingSite: true,
-            siteName: '보안 보호 웹페이지',
+            siteName: '보안 방화벽 보호 웹페이지',
             pageUrl: url,
-            error: '해당 웹페이지는 보안 방화벽으로 외부 서버의 직접 수집을 제한하고 있습니다. 브라우저에서 직접 수집하는 [⚡ 1초 북마크릿] 또는 [HTML 소스 직접 분석(Ctrl+U 복사)]을 이용하시면 모든 이미지를 100% 정상 수집할 수 있습니다.',
+            error: '해당 웹페이지는 보안 방화벽으로 외부 서버의 직접 수집을 제한하고 있습니다. 브라우저에서 직접 수집하는 [⚡ 1초 북마크릿] 또는 [HTML 소스 직접 분석(Ctrl+U 복사)]을 이용하시면 모든 이미지를 정상 수집할 수 있습니다.',
           });
           return;
         }
@@ -431,22 +431,13 @@ async function startServer() {
         totalCount: extracted.images.length,
       });
     } catch (err: any) {
-      if (isCoupang || isNaver || isAli) {
-        res.json({
-          success: false,
-          isProtectedShoppingSite: true,
-          siteName: '보안 보호 웹페이지',
-          pageUrl: url,
-          error: '해당 웹페이지는 보안 방화벽으로 외부 서버 직접 접속을 차단합니다. [⚡ 1초 북마크릿] 또는 [HTML 소스 직접 분석] 탭으로 즉시 100% 추출할 수 있습니다!',
-        });
-        return;
-      }
-
-      const message =
-        err.name === 'AbortError'
-          ? '해당 웹페이지의 응답 시간이 초과되었습니다 (15초 제한).'
-          : err.message || '웹페이지 정보를 가져오는 중 오류가 발생했습니다.';
-      res.status(500).json({ success: false, error: message });
+      res.json({
+        success: false,
+        isProtectedShoppingSite: true,
+        siteName: '보안 방화벽 보호 웹페이지',
+        pageUrl: url,
+        error: '해당 웹페이지는 보안 방화벽으로 서버 직접 접속이 차단되었습니다. [⚡ 1초 북마크릿] 또는 [HTML 소스 직접 분석] 탭을 이용하시면 즉시 100% 정상 추출됩니다!',
+      });
     }
   });
 

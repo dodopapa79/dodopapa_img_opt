@@ -589,21 +589,21 @@ export function WebImageExtractor({
                 <h3 className="font-bold text-sm sm:text-base text-white">⚡ 북마크 하나로 모든 웹페이지 이미지 1초 추출</h3>
               </div>
               <span className="text-[11px] text-zinc-400">
-                💡 북마크바가 안 보이면 키보드 <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 font-mono">Ctrl + Shift + B</kbd>
+                💡 브라우저 상단 북마크바가 안 보이면: <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 font-mono">Ctrl + Shift + B</kbd>
               </span>
             </div>
 
-            {/* 2-Step Simple Layout */}
+            {/* 2-Step Ultra Simple Layout */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* 1단계: 북마크에 추가 */}
+              {/* 1단계: 북마크바에 등록 */}
               <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-3">
                 <div className="flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-emerald-500 text-white font-bold text-xs flex items-center justify-center shrink-0">
                     1
                   </span>
-                  <h4 className="font-bold text-sm text-white">북마크바에 추가하기</h4>
+                  <h4 className="font-bold text-sm text-white">북마크바에 등록하기</h4>
                 </div>
-                <p className="text-zinc-400 text-xs leading-relaxed">
+                <p className="text-zinc-300 text-xs leading-relaxed">
                   아래 녹색 버튼을 마우스로 잡고 브라우저 상단 <strong>북마크바</strong>로 끌어다 놓으세요.
                 </p>
 
@@ -611,7 +611,7 @@ export function WebImageExtractor({
                   {/* Draggable bookmarklet link */}
                   <a
                     ref={bookmarkletAnchorRef}
-                    href="#"
+                    href={bookmarkletCode}
                     draggable
                     onMouseEnter={syncBookmarkletHref}
                     onFocus={syncBookmarkletHref}
@@ -634,7 +634,7 @@ export function WebImageExtractor({
                       }
                     }}
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md cursor-grab active:cursor-grabbing border border-emerald-400 transition-colors"
-                    title="이 버튼을 브라우저 북마크바로 끌어다 놓으세요"
+                    title="이 버튼을 브라우저 북마크바로 끌어다 놓으세요 (클릭 시 현재 페이지에서 테스트)"
                   >
                     <Bookmark className="w-4 h-4 fill-white" />
                     <span>⚡ 이미지 추출기 (여기를 드래그)</span>
@@ -664,9 +664,10 @@ export function WebImageExtractor({
                   </button>
                 </div>
 
-                <p className="text-[11px] text-zinc-500 leading-normal">
-                  * 드래그가 잘 안 되시면 <button type="button" onClick={handleCopyBookmarklet} className="text-emerald-400 underline font-medium hover:text-emerald-300">[코드 복사]</button> 후 북마크바 빈 곳 우클릭 ➔ [페이지 추가]에서 URL에 붙여넣기 하셔도 됩니다.
-                </p>
+                <div className="p-2.5 rounded-lg bg-zinc-950/70 border border-zinc-800 text-[11px] text-zinc-400 space-y-1">
+                  <div>* <strong>드래그 방법:</strong> 위 녹색 버튼을 꾹 누른 채 브라우저 주소창 바로 밑 북마크바로 끌어다 놓으시면 됩니다.</div>
+                  <div>* <strong>수동 등록:</strong> 드래그가 안 될 땐 [코드 복사] 후 북마크바 빈 곳 우클릭 ➔ [페이지 추가]에서 URL(주소) 란에 붙여넣기 하시면 됩니다.</div>
+                </div>
               </div>
 
               {/* 2단계: 원하는 페이지에서 클릭 */}
@@ -675,24 +676,24 @@ export function WebImageExtractor({
                   <span className="w-6 h-6 rounded-full bg-emerald-500 text-white font-bold text-xs flex items-center justify-center shrink-0">
                     2
                   </span>
-                  <h4 className="font-bold text-sm text-white">원하는 페이지에서 북마크 클릭!</h4>
+                  <h4 className="font-bold text-sm text-white">원하는 웹페이지에서 북마크 클릭!</h4>
                 </div>
-                <p className="text-zinc-400 text-xs leading-relaxed">
-                  쿠팡, 스마트스토어, 알리익스프레스 등 추출하고 싶은 사이트에서 <strong>북마크를 누르세요.</strong>
+                <p className="text-zinc-300 text-xs leading-relaxed">
+                  이미지를 추출하고 싶은 웹페이지를 열고 등록해둔 <strong>[⚡ 이미지 추출기] 북마크를 클릭하세요.</strong>
                 </p>
 
                 <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800/80 space-y-1.5">
                   <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-xs">
                     <Check className="w-3.5 h-3.5" />
-                    <span>화면 가운데에 팝업창이 즉시 열립니다!</span>
+                    <span>화면 가운데에 이미지 추출 팝업창이 즉시 열립니다!</span>
                   </div>
                   <p className="text-zinc-400 text-[11px] leading-relaxed">
-                    팝업창에서 <strong>[🚀 최적화기에서 열기]</strong>를 누르면 모든 고화질 이미지를 ZIP 파일로 일괄 다운로드할 수 있습니다.
+                    팝업창에서 <strong>[🚀 이미지 일괄 다운로드]</strong>를 누르면 모든 고화질 이미지를 ZIP 파일로 즉시 다운로드할 수 있습니다.
                   </p>
                 </div>
 
-                <div className="pt-1 flex items-center justify-between text-[11px] text-zinc-500">
-                  <span>* 본문으로 스크롤을 살짝 내린 후 북마크를 눌러주세요.</span>
+                <div className="pt-1 flex items-center justify-between text-[11px] text-zinc-400">
+                  <span>* 페이지 본문으로 스크롤을 살짝 내린 후 북마크를 눌러주세요.</span>
                   <button
                     type="button"
                     onClick={() => setMode('html')}
