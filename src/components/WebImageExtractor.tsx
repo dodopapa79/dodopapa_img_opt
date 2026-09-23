@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Globe,
   Search,
@@ -110,6 +110,20 @@ export function WebImageExtractor({
     return generateBookmarkletCode(appUrl);
   }, [appUrl]);
 
+  // Direct DOM ref to bypass React's JSX URL sanitizer that blocks 'javascript:' links
+  const bookmarkletAnchorRef = useRef<HTMLAnchorElement>(null);
+  const [copiedBookmarklet, setCopiedBookmarklet] = useState(false);
+
+  const syncBookmarkletHref = useCallback(() => {
+    if (bookmarkletAnchorRef.current && bookmarkletCode) {
+      bookmarkletAnchorRef.current.setAttribute('href', bookmarkletCode);
+    }
+  }, [bookmarkletCode]);
+
+  useEffect(() => {
+    syncBookmarkletHref();
+  }, [syncBookmarkletHref]);
+
   // Listen for Bookmarklet or PostMessage data transfer
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -117,7 +131,7 @@ export function WebImageExtractor({
         const { title, pageUrl, images: rawList } = event.data.payload;
         if (Array.isArray(rawList) && rawList.length > 0) {
           const parsed = parseImagesFromRawText(rawList.join('\n'));
-          parsed.pageTitle = title || '쇼핑몰 수집 이미지';
+          parsed.pageTitle = title || '추출된 이미지 목록';
           parsed.pageUrl = pageUrl || '';
           setResult(parsed);
           setSuccessToast(`🎉 ${title || '웹페이지'}에서 이미지 ${parsed.totalCount}개를 브라우저에서 직접 수집했습니다!`);
@@ -390,7 +404,8 @@ export function WebImageExtractor({
   // Copy Bookmarklet Code
   const handleCopyBookmarklet = () => {
     navigator.clipboard.writeText(bookmarkletCode).then(() => {
-      alert('북마크릿 코드가 복사되었습니다! 브라우저 북마크를 생성한 후 URL 주소창에 붙여넣으세요.');
+      setCopiedBookmarklet(true);
+      setTimeout(() => setCopiedBookmarklet(false), 3500);
     });
   };
 
@@ -595,9 +610,22 @@ export function WebImageExtractor({
                 </div>
 
                 <div className="pt-2 flex flex-wrap items-center gap-2">
-                  {/* Draggable bookmarklet link */}
+                  {/* Draggable bookmarklet link with native DOM ref to bypass React JSX URL sanitizer */}
                   <a
-                    href={bookmarkletCode}
+                    ref={bookmarkletAnchorRef}
+                    href="#"
+                    draggable
+                    onMouseEnter={syncBookmarkletHref}
+                    onFocus={syncBookmarkletHref}
+                    onDragStart={(e) => {
+                      syncBookmarkletHref();
+                      try {
+                        e.dataTransfer.setData('text/uri-list', bookmarkletCode);
+                        e.dataTransfer.setData('text/plain', bookmarkletCode);
+                      } catch {
+                        // ignore
+                      }
+                    }}
                     onClick={(e) => {
                       e.preventDefault();
                       // Allow direct in-tab testing if clicked!
@@ -618,12 +646,43 @@ export function WebImageExtractor({
                   <button
                     type="button"
                     onClick={handleCopyBookmarklet}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold"
-                    title="코드 수동 복사"
+                    className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all shadow-sm ${
+                      copiedBookmarklet
+                        ? 'bg-emerald-600 text-white ring-2 ring-emerald-400'
+                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white border border-zinc-700'
+                    }`}
+                    title="북마크 URL 주소 복사"
                   >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>코드 복사</span>
+                    {copiedBookmarklet ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-200" />
+                        <span>✓ 복사 완료!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>코드 복사 (추천)</span>
+                      </>
+                    )}
                   </button>
+                </div>
+
+                {/* 10-second manual setup guide */}
+                <div className="mt-2 p-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-300 space-y-1.5">
+                  <div className="flex items-center justify-between text-zinc-400 font-medium">
+                    <span className="text-emerald-400 font-bold flex items-center gap-1">
+                      <Bookmark className="w-3 h-3" />
+                      초간단 수동 등록 방법 (가장 확실함)
+                    </span>
+                    {copiedBookmarklet && (
+                      <span className="text-emerald-400 text-[10px] font-bold">클립보드 복사됨!</span>
+                    )}
+                  </div>
+                  <ol className="list-decimal list-inside space-y-0.5 text-[10px] text-zinc-400 pl-0.5">
+                    <li>위 <strong className="text-zinc-200">[코드 복사 (추천)]</strong> 버튼을 클릭합니다.</li>
+                    <li>크롬 브라우저 상단 북마크바 빈 곳 우클릭 ➔ <strong>[페이지 추가]</strong> 클릭</li>
+                    <li>이름에 <strong className="text-white">이미지 추출기</strong>, URL에 <strong className="text-emerald-400">Ctrl+V (붙여넣기)</strong> 후 <strong>[저장]</strong></li>
+                  </ol>
                 </div>
               </div>
 
@@ -669,17 +728,20 @@ export function WebImageExtractor({
             <div className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200/90 space-y-1">
               <div className="font-bold flex items-center gap-1.5 text-amber-400">
                 <AlertCircle className="w-4 h-4" />
-                <span>북마크를 눌러도 반응이 없는 경우 해결 방법:</span>
+                <span>북마크를 눌러도 반응이 없거나 에러가 뜨는 경우:</span>
               </div>
-              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-zinc-300 pl-1">
-                <li>
-                  <strong>북마크 URL 확인:</strong> 북마크 등록 시 <code className="text-amber-300">javascript:</code> 접두사가 빠지지 않았는지 확인하세요. (<button type="button" onClick={handleCopyBookmarklet} className="underline text-emerald-400 font-bold">코드 복사</button> 후 북마크 주소에 붙여넣기 추천)
+              <ul className="list-disc list-inside space-y-1 text-[11px] text-zinc-300 pl-1">
+                <li className="text-amber-300/90 font-medium">
+                  <strong>"React has blocked a javascript: URL..." 에러가 떴던 경우:</strong>
+                  <span className="text-zinc-300 font-normal pl-4 block">
+                    기존에 브라우저에 등록하셨던 북마크를 <strong>우클릭 ➔ 삭제</strong>하시고, 위 녹색 버튼을 다시 드래그하시거나 <strong>[코드 복사 (추천)]</strong>를 눌러 북마크에 [페이지 추가]를 해주시면 정상 작동합니다!
+                  </span>
                 </li>
                 <li>
                   <strong>스크롤 로딩:</strong> 페이지 스크롤을 살짝 내려 상세 이미지가 화면에 로드된 후 북마크를 누르면 모든 고화질 컷이 완벽하게 추출됩니다.
                 </li>
                 <li>
-                  <strong>가장 확실하고 빠른 방법:</strong> 해당 웹페이지에서 <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-white">Ctrl + U</kbd> 누르고 전체 복사(<kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-white">Ctrl+A</kbd>, <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-white">Ctrl+C</kbd>)하여 <strong>[HTML 소스 직접 분석]</strong> 탭에 넣으시면 <strong>100% 즉시 추출</strong>됩니다!
+                  <strong>가장 확실하고 빠른 대안:</strong> 해당 웹페이지에서 <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-white">Ctrl + U</kbd> 누르고 전체 복사(<kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-white">Ctrl+A</kbd>, <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-white">Ctrl+C</kbd>)하여 <strong>[HTML 소스 직접 분석]</strong> 탭에 넣으시면 <strong>100% 즉시 추출</strong>됩니다!
                 </li>
               </ul>
             </div>

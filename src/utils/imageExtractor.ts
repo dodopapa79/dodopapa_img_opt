@@ -229,7 +229,7 @@ export function parseImagesFromHtmlClient(html: string, pageUrl = 'https://custo
   const rawMatches = html.match(rawShoppingCdnRegex);
   if (rawMatches) {
     for (const rawUrl of rawMatches) {
-      addImage(rawUrl, '쇼핑몰 고화질 이미지', 'product');
+      addImage(rawUrl, '고화질 원본 이미지', 'product');
     }
   }
 
