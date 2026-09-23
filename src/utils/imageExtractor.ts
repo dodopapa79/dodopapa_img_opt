@@ -431,69 +431,202 @@ export async function downloadExtractedImagesAsZip(
 
 /**
  * Generates bookmarklet JavaScript string that works in Chrome, Whale, Edge, Safari
+ * Injects a floating in-page toolbar on Coupang, Naver, AliExpress, etc.
  */
 export function generateBookmarkletCode(appUrl: string): string {
-  const code = `
-javascript:(function(){
-  try {
-    var urls = new Set();
-    document.querySelectorAll('img').forEach(function(img){
-      [img.src, img.getAttribute('data-src'), img.getAttribute('data-original'), img.getAttribute('data-lazy-src'), img.getAttribute('data-actualsrc')]
-        .filter(Boolean).forEach(function(u){ urls.add(u); });
-      var srcset = img.getAttribute('srcset');
-      if (srcset) {
-        srcset.split(',').forEach(function(p){
-          var c = p.trim().split(/\\s+/)[0];
-          if (c) urls.add(c);
-        });
-      }
-    });
-    document.querySelectorAll('*').forEach(function(el){
-      var bg = window.getComputedStyle(el).backgroundImage;
-      if (bg && bg.indexOf('url(') !== -1) {
-        var m = bg.match(/url\\(["']?([^"')]+)["']?\\)/);
-        if (m && m[1]) urls.add(m[1]);
-      }
-    });
-    document.querySelectorAll('script').forEach(function(s){
-      var t = s.textContent || '';
-      if (t.length > 30 && (t.indexOf('cdn') !== -1 || t.indexOf('jpg') !== -1 || t.indexOf('image') !== -1)) {
-        var matches = t.match(/https?:\\\\?\\/\\\\?\\/[^\\s"'<>]+\\.(?:jpg|jpeg|png|webp)(?:\\?[^\\s"'<>]*)?/gi);
-        if (matches) {
-          matches.forEach(function(u){
-            urls.add(u.replace(/\\\\\\/|\\\\u002F/g, '/').replace(/\\\\"/g, ''));
-          });
+  const runner = function (TARGET_APP_URL: string) {
+    try {
+      const existing = document.getElementById('ais-bulk-overlay');
+      if (existing) existing.remove();
+
+      const urls: string[] = [];
+      const seen: Record<string, boolean> = {};
+
+      const add = (u: any) => {
+        if (!u || typeof u !== 'string') return;
+        let trimmed = u.trim();
+        if (trimmed.indexOf('http') !== 0) return;
+        if (
+          trimmed.indexOf('1x1') !== -1 ||
+          trimmed.indexOf('pixel') !== -1 ||
+          trimmed.indexOf('spacer') !== -1 ||
+          trimmed.indexOf('blank.gif') !== -1
+        ) {
+          return;
+        }
+
+        // Coupang high-res upgrade
+        if (trimmed.indexOf('coupangcdn.com') !== -1) {
+          trimmed = trimmed
+            .replace(/\/thumbnails\/remote\/\d+x\d+ex\//, '/')
+            .replace(/\/thumbnails\/remote\/q\d+\//, '/')
+            .replace(/\?q=\d+$/, '');
+        }
+        // Naver SmartStore / Shopping high-res upgrade
+        if (trimmed.indexOf('pstatic.net') !== -1 && trimmed.indexOf('?type=') !== -1) {
+          trimmed = trimmed.replace(/\?type=[a-zA-Z0-9_-]+/, '?type=o');
+        }
+        // AliExpress high-res upgrade
+        if (trimmed.indexOf('alicdn.com') !== -1) {
+          trimmed = trimmed
+            .replace(/_\d+x\d+\.(?:jpg|png|webp)/g, '')
+            .replace(/_\.(?:webp|jpg)$/g, '')
+            .replace(/_Q\d+\.jpg$/g, '');
+        }
+
+        if (!seen[trimmed]) {
+          seen[trimmed] = true;
+          urls.push(trimmed);
+        }
+      };
+
+      // 1. img tags (including lazy attributes)
+      const imgs = document.querySelectorAll('img');
+      for (let i = 0; i < imgs.length; i++) {
+        const img = imgs[i];
+        add(img.src);
+        add(img.getAttribute('data-src'));
+        add(img.getAttribute('data-original'));
+        add(img.getAttribute('data-lazy-src'));
+        add(img.getAttribute('data-actualsrc'));
+        const srcset = img.getAttribute('srcset');
+        if (srcset) {
+          const parts = srcset.split(',');
+          for (let j = 0; j < parts.length; j++) {
+            add(parts[j].trim().split(/\s+/)[0]);
+          }
         }
       }
-    });
-    var arr = Array.from(urls).filter(function(u){
-      return u.indexOf('http') === 0 && u.indexOf('1x1') === -1 && u.indexOf('pixel') === -1;
-    });
-    if (arr.length === 0) {
-      alert('현재 페이지에서 이미지를 발견하지 못했습니다.');
-      return;
-    }
-    var payload = {
-      title: document.title || '쇼핑몰 이미지',
-      pageUrl: location.href,
-      images: arr
-    };
-    var targetWin = window.open('${appUrl}?mode=extractor&source=bookmarklet', '_blank');
-    if (targetWin) {
-      var count = 0;
-      var timer = setInterval(function(){
-        count++;
-        targetWin.postMessage({ type: 'AIS_IMAGES_TRANSFER', payload: payload }, '*');
-        if (count > 20) clearInterval(timer);
-      }, 500);
-    } else {
-      alert('팝업 차단을 해제해주세요.');
-    }
-  } catch(e) {
-    alert('이미지 추출 오류: ' + e.message);
-  }
-})();
-  `.trim().replace(/[\r\n\t]+/g, ' ');
 
-  return code;
+      // 2. Computed background images
+      const allEls = document.querySelectorAll('*');
+      for (let e = 0; e < Math.min(allEls.length, 600); e++) {
+        const bg = window.getComputedStyle(allEls[e]).backgroundImage;
+        if (bg && bg.indexOf('url(') !== -1) {
+          const m = bg.match(/url\(["']?([^"')]+)["']?\)/);
+          if (m && m[1]) add(m[1]);
+        }
+      }
+
+      // 3. Scripts JSON scan (Coupang, Naver, AliExpress embedded product data)
+      const scripts = document.querySelectorAll('script');
+      const regex = new RegExp('https?:\\/\\/[^\\s"\'<>]+?\\.(?:jpg|jpeg|png|webp)', 'gi');
+      for (let s = 0; s < scripts.length; s++) {
+        const txt = scripts[s].textContent || '';
+        if (
+          txt.length > 30 &&
+          (txt.indexOf('cdn') !== -1 ||
+            txt.indexOf('jpg') !== -1 ||
+            txt.indexOf('image') !== -1 ||
+            txt.indexOf('photo') !== -1 ||
+            txt.indexOf('pstatic') !== -1)
+        ) {
+          let match: RegExpExecArray | null;
+          while ((match = regex.exec(txt)) !== null) {
+            add(match[0].split('\\').join(''));
+          }
+        }
+      }
+
+      if (urls.length === 0) {
+        alert('현재 페이지에서 이미지를 발견하지 못했습니다. 페이지 스크롤을 살짝 내린 후 다시 눌러주세요.');
+        return;
+      }
+
+      // Build In-Page Floating UI Overlay
+      const wrap = document.createElement('div');
+      wrap.id = 'ais-bulk-overlay';
+      wrap.style.cssText =
+        'position:fixed;bottom:24px;right:24px;width:380px;max-width:calc(100vw - 48px);max-height:85vh;background:#18181b;color:#ffffff;border-radius:18px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.15);z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;display:flex;flex-direction:column;overflow:hidden;';
+
+      const header = document.createElement('div');
+      header.style.cssText =
+        'padding:14px 16px;background:#09090b;border-bottom:1px solid #27272a;display:flex;align-items:center;justify-content:space-between;';
+      header.innerHTML =
+        '<div style="display:flex;align-items:center;gap:8px;"><span style="background:#10b981;color:#fff;font-weight:800;font-size:11px;padding:3px 7px;border-radius:6px;">성공</span><span style="font-weight:700;font-size:13px;">이미지 <strong style="color:#34d399;">' +
+        urls.length +
+        '개</strong> 발견!</span></div><button id="ais-btn-close" style="background:none;border:none;color:#a1a1aa;cursor:pointer;font-size:18px;padding:2px 6px;line-height:1;">✕</button>';
+      wrap.appendChild(header);
+
+      const grid = document.createElement('div');
+      grid.style.cssText =
+        'padding:12px;overflow-y:auto;max-height:240px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;background:#18181b;';
+      for (let k = 0; k < Math.min(urls.length, 30); k++) {
+        const item = document.createElement('div');
+        item.style.cssText =
+          'aspect-ratio:1;border-radius:8px;overflow:hidden;background:#27272a;border:1px solid #3f3f46;';
+        const m = document.createElement('img');
+        m.src = urls[k];
+        m.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+        m.setAttribute('referrerpolicy', 'no-referrer');
+        item.appendChild(m);
+        grid.appendChild(item);
+      }
+      wrap.appendChild(grid);
+
+      const actions = document.createElement('div');
+      actions.style.cssText =
+        'padding:12px;background:#09090b;border-top:1px solid #27272a;display:flex;flex-direction:column;gap:8px;';
+
+      const btnOpen = document.createElement('button');
+      btnOpen.style.cssText =
+        'width:100%;padding:10px 14px;background:#10b981;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;';
+      btnOpen.innerHTML = '🚀 최적화기에서 열기 & ZIP 다운로드';
+      btnOpen.onclick = function () {
+        const win = window.open(TARGET_APP_URL + '?mode=extractor&source=bookmarklet', '_blank');
+        if (win) {
+          let c = 0;
+          const t = setInterval(function () {
+            c++;
+            win.postMessage(
+              {
+                type: 'AIS_IMAGES_TRANSFER',
+                payload: { title: document.title, pageUrl: location.href, images: urls },
+              },
+              '*'
+            );
+            if (c > 25) clearInterval(t);
+          }, 600);
+        } else {
+          alert('브라우저의 팝업 차단을 허용해주세요.');
+        }
+      };
+      actions.appendChild(btnOpen);
+
+      const btnCopy = document.createElement('button');
+      btnCopy.style.cssText =
+        'width:100%;padding:8px 12px;background:#27272a;color:#e4e4e7;border:1px solid #3f3f46;border-radius:10px;font-weight:600;font-size:12px;cursor:pointer;';
+      btnCopy.innerHTML = '📋 전체 이미지 주소 복사 (' + urls.length + '개)';
+      btnCopy.onclick = function () {
+        navigator.clipboard
+          .writeText(urls.join('\n'))
+          .then(function () {
+            btnCopy.innerHTML = '✓ 복사 완료! (최적화기에 붙여넣기 가능)';
+            btnCopy.style.background = '#059669';
+            setTimeout(function () {
+              btnCopy.innerHTML = '📋 전체 이미지 주소 복사 (' + urls.length + '개)';
+              btnCopy.style.background = '#27272a';
+            }, 2000);
+          })
+          .catch(function () {
+            prompt('Ctrl+C를 눌러 복사하세요:', urls.join('\n'));
+          });
+      };
+      actions.appendChild(btnCopy);
+
+      wrap.appendChild(actions);
+      document.body.appendChild(wrap);
+
+      const closeBtn = document.getElementById('ais-btn-close');
+      if (closeBtn) {
+        closeBtn.onclick = function () {
+          wrap.remove();
+        };
+      }
+    } catch (err: any) {
+      alert('이미지 추출 오류: ' + (err ? err.message : '알 수 없는 오류'));
+    }
+  };
+
+  return 'javascript:(' + runner.toString() + ')(' + JSON.stringify(appUrl) + ');';
 }

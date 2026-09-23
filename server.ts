@@ -358,13 +358,12 @@ async function startServer() {
         (isCoupang && response.status === 403)
       ) {
         if (isCoupang || isNaver || isAli) {
-          const mallName = isCoupang ? '쿠팡' : isNaver ? '네이버쇼핑' : '알리익스프레스';
           res.json({
             success: false,
             isProtectedShoppingSite: true,
-            siteName: mallName,
+            siteName: '보안 보호 웹페이지',
             pageUrl: url,
-            error: `${mallName}은 보안 방화벽(Akamai/WAF)으로 외부 서버의 직접 수집을 차단하고 있습니다. 크롬 확장프로그램처럼 브라우저에서 직접 수집하는 [⚡ 1초 북마크릿] 또는 [HTML 소스 직접 분석(Ctrl+U 복사)]을 이용하시면 모든 상품 사진과 상세페이지를 100% 정상 수집할 수 있습니다.`,
+            error: '해당 웹페이지는 보안 방화벽으로 외부 서버의 직접 수집을 제한하고 있습니다. 브라우저에서 직접 수집하는 [⚡ 1초 북마크릿] 또는 [HTML 소스 직접 분석(Ctrl+U 복사)]을 이용하시면 모든 이미지를 100% 정상 수집할 수 있습니다.',
           });
           return;
         }
@@ -411,13 +410,12 @@ async function startServer() {
         (isNaver && html.includes('internal-error.html')) ||
         html.includes('punish?type=')
       ) {
-        const mallName = isCoupang ? '쿠팡' : isNaver ? '네이버쇼핑' : '알리익스프레스';
         res.json({
           success: false,
           isProtectedShoppingSite: true,
-          siteName: mallName,
+          siteName: '보안 보호 웹페이지',
           pageUrl: url,
-          error: `${mallName} 보안 시스템이 서버 요청을 차단했습니다. [⚡ 1초 북마크릿] 또는 [HTML 소스 직접 분석]을 이용해주세요!`,
+          error: '해당 웹페이지의 보안 시스템이 서버 요청을 차단했습니다. [⚡ 1초 북마크릿] 또는 [HTML 소스 직접 분석]을 이용해주세요!',
         });
         return;
       }
@@ -434,13 +432,12 @@ async function startServer() {
       });
     } catch (err: any) {
       if (isCoupang || isNaver || isAli) {
-        const mallName = isCoupang ? '쿠팡' : isNaver ? '네이버쇼핑' : '알리익스프레스';
         res.json({
           success: false,
           isProtectedShoppingSite: true,
-          siteName: mallName,
+          siteName: '보안 보호 웹페이지',
           pageUrl: url,
-          error: `${mallName}은 보안 방화벽으로 외부 서버 직접 접속을 차단합니다. [⚡ 1초 북마크릿] 또는 [HTML 소스 직접 분석] 탭으로 즉시 100% 추출할 수 있습니다!`,
+          error: '해당 웹페이지는 보안 방화벽으로 외부 서버 직접 접속을 차단합니다. [⚡ 1초 북마크릿] 또는 [HTML 소스 직접 분석] 탭으로 즉시 100% 추출할 수 있습니다!',
         });
         return;
       }

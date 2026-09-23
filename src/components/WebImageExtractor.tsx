@@ -94,10 +94,21 @@ export function WebImageExtractor({
   const [exportingToOptimizer, setExportingToOptimizer] = useState(false);
 
   // Bookmarklet Code
-  const bookmarkletCode = useMemo(() => {
-    const origin = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : '';
-    return generateBookmarkletCode(origin);
+  const appUrl = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const u = new URL(window.location.href);
+        return `${u.protocol}//${u.host}${u.pathname}`;
+      } catch {
+        return window.location.origin || '';
+      }
+    }
+    return '';
   }, []);
+
+  const bookmarkletCode = useMemo(() => {
+    return generateBookmarkletCode(appUrl);
+  }, [appUrl]);
 
   // Listen for Bookmarklet or PostMessage data transfer
   useEffect(() => {
@@ -148,7 +159,7 @@ export function WebImageExtractor({
       const data = await extractImagesFromUrl(target);
       if (data.isProtectedShoppingSite) {
         setBlockedMallInfo({
-          siteName: data.siteName || '쇼핑몰',
+          siteName: data.siteName || '웹페이지',
           pageUrl: target,
         });
         setErrorMsg(data.error || '보안 방화벽으로 인해 직접 서버 접속이 차단되었습니다.');
@@ -158,15 +169,7 @@ export function WebImageExtractor({
         setResult(data);
       }
     } catch (err: any) {
-      const targetLower = target.toLowerCase();
-      if (targetLower.includes('coupang') || targetLower.includes('naver') || targetLower.includes('aliexpress')) {
-        const siteName = targetLower.includes('coupang')
-          ? '쿠팡'
-          : targetLower.includes('naver')
-          ? '네이버쇼핑'
-          : '알리익스프레스';
-        setBlockedMallInfo({ siteName, pageUrl: target });
-      }
+      setBlockedMallInfo({ siteName: '보안 보호 웹페이지', pageUrl: target });
       setErrorMsg(err.message || '이미지를 추출하는 중 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
@@ -261,9 +264,12 @@ export function WebImageExtractor({
         return false;
       }
 
-      // Shopping Mall Filter
-      if (selectedMall !== 'all') {
-        if (img.sourceMall !== selectedMall) return false;
+      // Quality Filter (highres vs all)
+      if (selectedMall === 'highres' && !img.isHighRes) {
+        return false;
+      }
+      if (selectedMall === 'general' && img.isHighRes) {
+        return false;
       }
 
       // Hide small images (< 60px if dimensions already loaded)
@@ -396,14 +402,13 @@ export function WebImageExtractor({
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/30">
               <ShoppingBag className="w-3.5 h-3.5" />
-              <span>쿠팡 · 스마트스토어 · 알리익스프레스 100% 지원</span>
+              <span>웹페이지 고화질 이미지 일괄 추출</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-              웹페이지 & 쇼핑몰 이미지 일괄 추출·다운로드
+              이미지 추출기
             </h2>
             <p className="text-xs sm:text-sm text-zinc-300 max-w-2xl leading-relaxed">
-              일반 웹사이트는 물론, 보안 방화벽이 걸린 <strong className="text-emerald-400 font-semibold">쿠팡, 네이버 스마트스토어, 알리익스프레스</strong>의
-              상품 대표 사진과 상세페이지 이미지까지 원본 스튜디오 화질로 추출하고 ZIP으로 일괄 다운로드할 수 있습니다.
+              웹페이지나 블로그, 상세페이지에 포함된 모든 이미지를 고화질 원본으로 추출하고 ZIP 파일로 일괄 다운로드할 수 있습니다.
             </p>
           </div>
 
@@ -438,7 +443,7 @@ export function WebImageExtractor({
             }`}
           >
             <Bookmark className="w-3.5 h-3.5 text-amber-300" />
-            <span>⚡ 1초 북마크릿 (쿠팡·네이버·알리 원클릭)</span>
+            <span>⚡ 1초 북마크릿 (원클릭 추출)</span>
             <span className="px-1.5 py-0.2 rounded bg-amber-400 text-black text-[10px] font-black">추천</span>
           </button>
 
@@ -573,7 +578,7 @@ export function WebImageExtractor({
                   </span>
                 </div>
                 <p className="text-zinc-400 text-xs">
-                  쿠팡, 네이버쇼핑, 알리익스프레스처럼 외부 봇을 차단하는 사이트도 사용자가 로그인한 브라우저 화면에서
+                  외부 봇 접근을 제한하는 웹페이지도 사용자가 보고 있는 브라우저 화면에서
                   직접 고화질 이미지를 즉시 수집하여 본 화면으로 전송합니다.
                 </p>
               </div>
@@ -585,21 +590,26 @@ export function WebImageExtractor({
                 <div className="space-y-1">
                   <span className="text-emerald-400 font-bold block">1단계: 북마크바에 등록</span>
                   <p className="text-zinc-400 text-[11px]">
-                    아래 버튼을 마우스로 끌어서 브라우저의 <strong>북마크바</strong>(Ctrl+Shift+B)에 놓으세요.
+                    아래 버튼을 마우스로 끌어서 브라우저 상단 <strong>북마크바</strong>(Ctrl+Shift+B)에 놓으세요.
                   </p>
                 </div>
 
-                <div className="pt-2 flex items-center gap-2">
+                <div className="pt-2 flex flex-wrap items-center gap-2">
                   {/* Draggable bookmarklet link */}
                   <a
                     href={bookmarkletCode}
                     onClick={(e) => {
-                      // Prevent navigation on click
                       e.preventDefault();
-                      alert('이 버튼을 클릭하지 말고, 브라우저 상단 [북마크바(즐겨찾기)]로 드래그해서 끌어다 놓으세요!');
+                      // Allow direct in-tab testing if clicked!
+                      try {
+                        const script = bookmarkletCode.replace('javascript:', '');
+                        new Function(script)();
+                      } catch (err: any) {
+                        alert('테스트 실행: ' + err.message);
+                      }
                     }}
                     className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs shadow-lg cursor-grab active:cursor-grabbing border border-emerald-400"
-                    title="이 링크를 북마크바로 드래그하세요"
+                    title="북마크바로 드래그하거나, 클릭해서 현재 화면에서 바로 테스트하세요"
                   >
                     <Bookmark className="w-4 h-4 fill-white" />
                     <span>⚡ 이미지 일괄 추출기 (드래그)</span>
@@ -608,35 +618,70 @@ export function WebImageExtractor({
                   <button
                     type="button"
                     onClick={handleCopyBookmarklet}
-                    className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold"
                     title="코드 수동 복사"
                   >
-                    <Copy className="w-4 h-4" />
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>코드 복사</span>
                   </button>
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1">
-                <span className="text-emerald-400 font-bold block">2단계: 쇼핑몰에서 클릭</span>
+              <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1.5">
+                <span className="text-emerald-400 font-bold block">2단계: 해당 웹페이지에서 클릭</span>
                 <p className="text-zinc-400 text-[11px]">
-                  쿠팡, 네이버 스마트스토어, 알리익스프레스 상품 페이지에서 등록해둔 북마크를 <strong>클릭</strong>합니다.
+                  추출하려는 웹페이지에서 <strong>스크롤을 살짝 내린 후</strong> 북마크를 클릭하세요.
                 </p>
-                <div className="pt-2 flex items-center gap-1.5 text-[10px] text-zinc-500 font-mono">
-                  <MousePointerClick className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Coupang · Naver · AliExpress 어디서든 1초 동작</span>
+                <div className="p-2 rounded-lg bg-zinc-950/80 border border-zinc-800 text-[11px] text-zinc-300 space-y-1">
+                  <div className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                    <MousePointerClick className="w-3.5 h-3.5" />
+                    <span>화면 우측 하단 플로팅 창 표시</span>
+                  </div>
+                  <p className="text-zinc-400 text-[10px] leading-relaxed">
+                    페이지 위에 고화질 사진 미리보기와 [최적화기 전송] 버튼이 즉시 나타납니다.
+                  </p>
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1">
+              <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2">
                 <span className="text-emerald-400 font-bold block">3단계: 자동 수신 & ZIP 다운로드</span>
                 <p className="text-zinc-400 text-[11px]">
-                  대표 사진과 상세페이지 이미지까지 고화질 스튜디오 원본으로 변환되어 바로 이 화면에 나타납니다.
+                  스튜디오 고화질 원본으로 변환된 모든 사진이 즉시 전송되며 한 번에 압축 저장됩니다.
                 </p>
-                <div className="pt-2 flex items-center gap-1.5 text-[10px] text-emerald-400 font-mono">
+                <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-mono">
                   <Check className="w-3.5 h-3.5" />
-                  <span>실시간 데이터 수신 대기 중...</span>
+                  <span>실시간 데이터 수신 대기 중</span>
+                </div>
+
+                <div className="pt-1 border-t border-zinc-800/80">
+                  <button
+                    type="button"
+                    onClick={() => setMode('html')}
+                    className="w-full text-left text-[11px] text-amber-400 hover:text-amber-300 font-medium hover:underline flex items-center gap-1"
+                  >
+                    <span>💡 북마크가 번거로우시면? [HTML 소스 복사] 탭 이용 ➔</span>
+                  </button>
                 </div>
               </div>
+            </div>
+
+            {/* Troubleshooting Alert Box */}
+            <div className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200/90 space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-amber-400">
+                <AlertCircle className="w-4 h-4" />
+                <span>북마크를 눌러도 반응이 없는 경우 해결 방법:</span>
+              </div>
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-zinc-300 pl-1">
+                <li>
+                  <strong>북마크 URL 확인:</strong> 북마크 등록 시 <code className="text-amber-300">javascript:</code> 접두사가 빠지지 않았는지 확인하세요. (<button type="button" onClick={handleCopyBookmarklet} className="underline text-emerald-400 font-bold">코드 복사</button> 후 북마크 주소에 붙여넣기 추천)
+                </li>
+                <li>
+                  <strong>스크롤 로딩:</strong> 페이지 스크롤을 살짝 내려 상세 이미지가 화면에 로드된 후 북마크를 누르면 모든 고화질 컷이 완벽하게 추출됩니다.
+                </li>
+                <li>
+                  <strong>가장 확실하고 빠른 방법:</strong> 해당 웹페이지에서 <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-white">Ctrl + U</kbd> 누르고 전체 복사(<kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-white">Ctrl+A</kbd>, <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-white">Ctrl+C</kbd>)하여 <strong>[HTML 소스 직접 분석]</strong> 탭에 넣으시면 <strong>100% 즉시 추출</strong>됩니다!
+                </li>
+              </ul>
             </div>
           </div>
         )}
@@ -645,7 +690,7 @@ export function WebImageExtractor({
         {mode === 'html' && (
           <div className="mt-4 space-y-2">
             <div className="flex items-center justify-between text-xs text-zinc-400">
-              <span>쿠팡 / 네이버 / 알리 상품 페이지에서 <strong>Ctrl+U</strong> (소스 보기) 후 전체 복사(Ctrl+A, Ctrl+C)하여 붙여넣으세요:</span>
+              <span>추출할 웹페이지에서 <strong>Ctrl+U</strong> (소스 보기) 후 전체 복사(Ctrl+A, Ctrl+C)하여 붙여넣으세요:</span>
               <button
                 type="button"
                 onClick={async () => {
@@ -719,7 +764,7 @@ export function WebImageExtractor({
         </div>
       )}
 
-      {/* Smart Guided Banner for Coupang / Naver / AliExpress bot blocks */}
+      {/* Smart Guided Banner for bot blocks */}
       {blockedMallInfo && (
         <div className="p-5 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-3 animate-in fade-in shadow-sm">
           <div className="flex items-start gap-3">
@@ -727,15 +772,14 @@ export function WebImageExtractor({
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="font-black text-sm text-amber-900">
-                  {blockedMallInfo.siteName} 보안 방화벽(Akamai/WAF) 감지됨
+                  보안 보호(방화벽) 웹페이지 감지됨
                 </span>
                 <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-bold">
                   브라우저 직접 수집 지원
                 </span>
               </div>
               <p className="text-xs text-amber-800 leading-relaxed">
-                {blockedMallInfo.siteName}은 크롬 확장프로그램처럼 <strong>사용자의 브라우저</strong>에서 직접 읽는 방식만 허용하며,
-                외부 서버의 접속을 엄격하게 차단하고 있습니다. 아래 2가지 방법 중 하나를 이용하시면 <strong>100% 정상 추출</strong>됩니다!
+                해당 웹페이지는 외부 서버의 자동화 수집을 제한하고 있습니다. 아래 2가지 방법 중 하나를 이용하시면 <strong>100% 정상 추출</strong>됩니다!
               </p>
             </div>
           </div>
@@ -754,7 +798,7 @@ export function WebImageExtractor({
                 <ArrowRight className="w-3.5 h-3.5 text-amber-600 group-hover:translate-x-0.5 transition-transform" />
               </div>
               <p className="text-[11px] text-amber-800">
-                북마크바에 마법사 버튼을 드래그해두고, {blockedMallInfo.siteName} 페이지에서 클릭하면 1초 만에 완료!
+                북마크바에 마법사 버튼을 드래그해두고, 해당 웹페이지에서 클릭하면 1초 만에 완료!
               </p>
             </button>
 
@@ -771,7 +815,7 @@ export function WebImageExtractor({
                 <ArrowRight className="w-3.5 h-3.5 text-amber-600 group-hover:translate-x-0.5 transition-transform" />
               </div>
               <p className="text-[11px] text-amber-800">
-                {blockedMallInfo.siteName}에서 Ctrl+U 소스 보기 후 복사(Ctrl+A, Ctrl+C)하여 붙여넣으면 즉시 추출!
+                해당 페이지에서 Ctrl+U 소스 보기 후 복사(Ctrl+A, Ctrl+C)하여 붙여넣으면 즉시 추출!
               </p>
             </button>
           </div>
@@ -889,13 +933,12 @@ export function WebImageExtractor({
             <div className="flex flex-wrap items-center gap-3">
               {/* Mall Filter */}
               <div className="flex items-center gap-1">
-                <span className="text-zinc-400 font-medium">출처:</span>
+                <span className="text-zinc-400 font-medium">화질:</span>
                 <div className="flex items-center gap-0.5 bg-zinc-100 p-0.5 rounded-lg border border-zinc-200">
                   {[
                     { id: 'all', label: '전체' },
-                    { id: 'coupang', label: '쿠팡' },
-                    { id: 'naver', label: '네이버' },
-                    { id: 'aliexpress', label: '알리' },
+                    { id: 'highres', label: '고화질 원본' },
+                    { id: 'general', label: '일반' },
                   ].map((m) => (
                     <button
                       key={m.id}
@@ -1027,31 +1070,15 @@ export function WebImageExtractor({
                     {/* Badges top-right */}
                     <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1">
                       <div className="flex items-center gap-1">
-                        {img.sourceMall === 'coupang' && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-red-500 text-white shadow-xs">
-                            쿠팡
-                          </span>
-                        )}
-                        {img.sourceMall === 'naver' && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-500 text-white shadow-xs">
-                            네이버
-                          </span>
-                        )}
-                        {img.sourceMall === 'aliexpress' && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-orange-500 text-white shadow-xs">
-                            알리
+                        {img.isHighRes && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-600 text-white shadow-xs">
+                            고화질 원본
                           </span>
                         )}
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-black/75 text-white backdrop-blur-xs">
                           {img.format}
                         </span>
                       </div>
-
-                      {img.isHighRes && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-600 text-white shadow-xs">
-                          고화질 원본
-                        </span>
-                      )}
                     </div>
 
                     {/* Image Preview Container with no-referrer policy */}
@@ -1158,22 +1185,21 @@ export function WebImageExtractor({
               추출할 웹페이지 링크 또는 소스를 입력해주세요
             </h3>
             <p className="text-xs text-zinc-500 leading-relaxed">
-              블로그는 물론, 크롬 확장프로그램처럼 <strong>쿠팡, 네이버 스마트스토어, 알리익스프레스</strong>의
-              모든 상품 사진을 고화질 스튜디오 원본으로 수집하여 ZIP으로 한 번에 내려받을 수 있습니다.
+              블로그는 물론 다양한 웹페이지와 상세페이지의 모든 이미지를 원본 고화질로 수집하여 ZIP으로 한 번에 내려받을 수 있습니다.
             </p>
           </div>
 
           <div className="pt-2 grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto text-left">
             <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-100 space-y-1">
-              <span className="text-emerald-600 font-bold text-xs block">01. 일반 웹사이트 & 블로그</span>
+              <span className="text-emerald-600 font-bold text-xs block">01. 일반 웹페이지 & 블로그</span>
               <p className="text-[11px] text-zinc-500">
                 URL 주소만 입력하면 본문 및 대표 썸네일(og:image)을 자동으로 크롤링합니다.
               </p>
             </div>
             <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-100 space-y-1">
-              <span className="text-emerald-600 font-bold text-xs block">02. 쿠팡 · 네이버 · 알리</span>
+              <span className="text-emerald-600 font-bold text-xs block">02. 보안 보호 웹페이지</span>
               <p className="text-[11px] text-zinc-500">
-                <strong>[⚡ 1초 북마크릿]</strong> 또는 <strong>[HTML 소스 직접 분석]</strong>으로 보안 차단 없이 100% 수집합니다.
+                <strong>[⚡ 1초 북마크릿]</strong> 또는 <strong>[HTML 소스 직접 분석]</strong>으로 보안 제한 없이 100% 수집합니다.
               </p>
             </div>
             <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-100 space-y-1">

@@ -353,7 +353,7 @@ export default function App() {
             }`}
           >
             <Globe className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'extractor' ? 'text-emerald-400' : 'text-zinc-400'}`} />
-            <span>웹페이지 이미지 추출기</span>
+            <span>이미지 추출기</span>
             <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-emerald-500 text-white leading-none">
               NEW
             </span>
