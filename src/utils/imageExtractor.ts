@@ -246,11 +246,56 @@ export function parseImagesFromHtmlClient(html: string, pageUrl = 'https://custo
 /**
  * Extracts images from a plain list of URLs or text snippet containing image links
  */
+export function parseImagesFromUrlArray(
+  urls: string[],
+  pageTitle = '추출된 이미지 목록',
+  pageUrl = ''
+): ExtractionResult {
+  const images: ExtractedImageItem[] = [];
+  const seenUrls = new Set<string>();
+
+  for (let i = 0; i < urls.length; i++) {
+    const rawUrl = (urls[i] || '').trim();
+    if (
+      !rawUrl ||
+      (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://') && !rawUrl.startsWith('data:'))
+    ) {
+      continue;
+    }
+    const highRes = upgradeToHighResolutionUrl(rawUrl);
+    const finalUrl = highRes || rawUrl;
+    if (seenUrls.has(finalUrl)) continue;
+    seenUrls.add(finalUrl);
+
+    images.push({
+      id: `ext-img-${images.length + 1}`,
+      url: finalUrl,
+      originalUrl: highRes !== rawUrl ? rawUrl : undefined,
+      previewUrl: finalUrl,
+      alt: `추출 이미지 ${images.length + 1}`,
+      format: detectFormatFromUrl(finalUrl),
+      type: 'img',
+      sourceMall: detectMallType(finalUrl),
+      isHighRes: highRes !== rawUrl,
+      selected: true,
+    });
+  }
+
+  return {
+    success: true,
+    pageTitle,
+    pageUrl,
+    images,
+    totalCount: images.length,
+  };
+}
+
 export function parseImagesFromRawText(text: string): ExtractionResult {
   const images: ExtractedImageItem[] = [];
   const seenUrls = new Set<string>();
 
-  const urlRegex = /https?:\/\/[^\s"'<>\\]+\.(?:jpg|jpeg|png|webp|gif|svg|avif)(?:\?[^\s"'<>\\]*)?/gi;
+  // Extract all http/https links regardless of extension
+  const urlRegex = /https?:\/\/[^\s"'<>\\]+/gi;
   const matches = text.match(urlRegex) || [];
 
   for (const rawUrl of matches) {
@@ -342,6 +387,39 @@ export async function extractImagesFromUrl(targetUrl: string): Promise<Extractio
 }
 
 /**
+ * Tries to load an image into an in-memory canvas and export as Blob
+ */
+function loadImageToBlobViaCanvas(url: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.referrerPolicy = 'no-referrer';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 800;
+        canvas.height = img.naturalHeight || 600;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Canvas context unavailable'));
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(
+          (blob) => {
+            if (blob && blob.size > 100) resolve(blob);
+            else reject(new Error('Canvas toBlob returned null or empty'));
+          },
+          'image/jpeg',
+          0.95
+        );
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = () => reject(new Error('Failed to load image element'));
+    img.src = url;
+  });
+}
+
+/**
  * Downloads image as a Blob with multi-layer proxy fallback
  */
 export async function fetchImageBlob(imageUrl: string): Promise<Blob> {
@@ -350,12 +428,13 @@ export async function fetchImageBlob(imageUrl: string): Promise<Blob> {
     return await res.blob();
   }
 
-  // 1. Local backend proxy with custom Referer header
+  // 1. Local backend proxy with multi-referer fallback
   try {
     const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
     const res = await fetch(proxyUrl);
     if (res.ok) {
-      return await res.blob();
+      const blob = await res.blob();
+      if (blob.size > 100) return blob;
     }
   } catch {
     // continue to direct fetch
@@ -368,13 +447,24 @@ export async function fetchImageBlob(imageUrl: string): Promise<Blob> {
       referrerPolicy: 'no-referrer',
     });
     if (res.ok) {
-      return await res.blob();
+      const blob = await res.blob();
+      if (blob.size > 100) return blob;
     }
   } catch {
-    // continue to CORS proxy
+    // continue to canvas
   }
 
-  // 3. Public CORS proxies
+  // 3. Client Canvas drawing (works if server sends standard CORS)
+  try {
+    const canvasBlob = await loadImageToBlobViaCanvas(imageUrl);
+    if (canvasBlob && canvasBlob.size > 100) {
+      return canvasBlob;
+    }
+  } catch {
+    // continue to public CORS proxies
+  }
+
+  // 4. Public CORS proxies
   const corsProxies = [
     `https://api.allorigins.win/raw?url=${encodeURIComponent(imageUrl)}`,
     `https://corsproxy.io/?${encodeURIComponent(imageUrl)}`,
@@ -384,7 +474,8 @@ export async function fetchImageBlob(imageUrl: string): Promise<Blob> {
     try {
       const res = await fetch(p);
       if (res.ok) {
-        return await res.blob();
+        const blob = await res.blob();
+        if (blob.size > 100) return blob;
       }
     } catch {
       // ignore
@@ -549,8 +640,19 @@ export function generateBookmarkletCode(appUrl: string): string {
     btnOpen.style.cssText = "width:100%!important;padding:12px 16px!important;background:#10b981!important;color:#fff!important;border:none!important;border-radius:12px!important;font-weight:700!important;font-size:13px!important;cursor:pointer!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;box-shadow:0 4px 12px rgba(16,185,129,0.3)!important;";
     btnOpen.innerHTML = "🚀 이미지추출기에서 열기";
     btnOpen.onclick = function() {
+      btnOpen.innerHTML = "⏳ 전송 및 여는 중...";
       try { navigator.clipboard.writeText(urls.join("\\n")); } catch(e) {}
-      var targetUrl = APP_URL + "?mode=extractor&source=bookmarklet";
+
+      try {
+        fetch(APP_URL + "/api/transfer-images", {
+          method: "POST",
+          mode: "cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: document.title, pageUrl: location.href, images: urls })
+        }).catch(function() {});
+      } catch(e) {}
+
+      var targetUrl = APP_URL + "?mode=extractor&source=bookmarklet&t=" + Date.now();
       var win = window.open(targetUrl, "AIS_IMAGE_EXTRACTOR_MAIN");
       if (win) {
         try { win.focus(); } catch(e) {}

@@ -36,6 +36,7 @@ import {
   extractImagesFromUrl,
   parseImagesFromHtmlClient,
   parseImagesFromRawText,
+  parseImagesFromUrlArray,
   fetchImageBlob,
   downloadExtractedImagesAsZip,
   blobToFile,
@@ -126,15 +127,35 @@ export function WebImageExtractor({
     syncBookmarkletHref();
   }, [syncBookmarkletHref, mode]);
 
-  // Listen for Bookmarklet or PostMessage data transfer
+  const lastProcessedTransferRef = useRef<number>(0);
+
+  // Synchronize incoming images from Bookmarklet via server transfer endpoint or postMessage
+  const checkTransferImages = useCallback(async () => {
+    try {
+      const res = await fetch('/api/transfer-images');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.images) && data.images.length > 0) {
+        if (data.timestamp && data.timestamp > lastProcessedTransferRef.current) {
+          lastProcessedTransferRef.current = data.timestamp;
+          const parsed = parseImagesFromUrlArray(data.images, data.title, data.pageUrl);
+          setResult(parsed);
+          setSuccessToast(`🎉 ${data.title || '웹페이지'}에서 이미지 ${parsed.totalCount}개를 성공적으로 불러왔습니다!`);
+          setTimeout(() => setSuccessToast(null), 5000);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Listen for Bookmarklet or PostMessage data transfer & sync on focus
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data && event.data.type === 'AIS_IMAGES_TRANSFER' && event.data.payload) {
         const { title, pageUrl, images: rawList } = event.data.payload;
         if (Array.isArray(rawList) && rawList.length > 0) {
-          const parsed = parseImagesFromRawText(rawList.join('\n'));
-          parsed.pageTitle = title || '추출된 이미지 목록';
-          parsed.pageUrl = pageUrl || '';
+          const parsed = parseImagesFromUrlArray(rawList, title, pageUrl);
           setResult(parsed);
           setSuccessToast(`🎉 ${title || '웹페이지'}에서 이미지 ${parsed.totalCount}개를 브라우저에서 직접 수집했습니다!`);
           setTimeout(() => setSuccessToast(null), 5000);
@@ -143,6 +164,23 @@ export function WebImageExtractor({
     };
 
     window.addEventListener('message', handleMessage);
+
+    // Initial check on mount
+    checkTransferImages();
+
+    // Check when user switches or focuses back to this window
+    const handleFocus = () => {
+      checkTransferImages();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkTransferImages();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+    const interval = setInterval(checkTransferImages, 1500);
 
     // If opened via bookmarklet, signal opener window that we are ready
     if (window.opener && window.opener !== window) {
@@ -155,8 +193,11 @@ export function WebImageExtractor({
 
     return () => {
       window.removeEventListener('message', handleMessage);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      clearInterval(interval);
     };
-  }, []);
+  }, [checkTransferImages]);
 
   // Handle URL Extract
   const handleExtractUrl = async (overrideUrl?: string) => {
@@ -315,17 +356,47 @@ export function WebImageExtractor({
     return filteredImages.filter((img) => img.selected).length;
   }, [filteredImages]);
 
-  // Single Image Download
+  // Single Image Download with multi-tier fallback (never blocks user)
   const handleDownloadSingle = async (img: ExtractedImageItem) => {
+    let ext = img.format || 'jpg';
+    if (ext === 'image') ext = 'jpg';
+    const cleanName = `${img.alt ? img.alt.slice(0, 20).replace(/[^a-zA-Z0-9가-힣_-]/g, '_') : 'image'}_${Date.now()}.${ext}`;
+
+    // 1. Try Blob download (via proxy or in-memory canvas)
     try {
       const blob = await fetchImageBlob(img.url);
-      let ext = img.format || 'jpg';
-      if (ext === 'image') ext = blob.type.split('/')[1] || 'jpg';
-      const cleanName = `${img.alt ? img.alt.slice(0, 20).replace(/[^a-zA-Z0-9가-힣_-]/g, '_') : 'image'}_${Date.now()}.${ext}`;
+      let detectedExt = blob.type ? blob.type.split('/')[1] : '';
+      if (detectedExt === 'jpeg') detectedExt = 'jpg';
+      if (detectedExt && (ext === 'image' || !ext)) ext = detectedExt;
       downloadBlob(blob, cleanName);
-    } catch (err: any) {
-      alert(`이미지 다운로드 실패: ${err.message}`);
+      return;
+    } catch (e) {
+      console.warn('Blob fetch failed, falling back to server attachment download...', e);
     }
+
+    // 2. Direct server download endpoint (Content-Disposition: attachment)
+    try {
+      const downloadUrl = `/api/download-file?url=${encodeURIComponent(img.url)}&filename=${encodeURIComponent(cleanName)}`;
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = cleanName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      return;
+    } catch (e) {
+      console.warn('Server download endpoint failed, falling back to direct anchor...', e);
+    }
+
+    // 3. Fallback: Direct browser anchor click
+    const a = document.createElement('a');
+    a.href = img.url;
+    a.download = cleanName;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
   // Download Selected as ZIP
@@ -622,6 +693,7 @@ export function WebImageExtractor({
                       syncBookmarkletHref();
                       try {
                         e.dataTransfer.setData('text/html', `<a href="${bookmarkletCode}">이미지추출기</a>`);
+                        e.dataTransfer.setData('text/x-moz-url', `${bookmarkletCode}\n이미지추출기`);
                         e.dataTransfer.setData('text/uri-list', bookmarkletCode);
                         e.dataTransfer.setData('text/plain', bookmarkletCode);
                       } catch {
@@ -671,9 +743,9 @@ export function WebImageExtractor({
                   </button>
                 </div>
 
-                <div className="p-2.5 rounded-lg bg-zinc-950/70 border border-zinc-800 text-[11px] text-zinc-400 space-y-1">
-                  <div>* <strong>드래그 방법:</strong> 위 <strong>[이미지추출기]</strong> 버튼을 마우스로 잡고 상단 북마크바(Ctrl+Shift+B)로 끌어다 놓으시면 이름과 아이콘이 자동 등록됩니다.</div>
-                  <div>* <strong>수동 등록:</strong> 드래그가 안 될 땐 [코드 복사] 후 북마크바 빈 곳 우클릭 ➔ [페이지 추가]에서 이름에 <code>이미지추출기</code>, URL(주소) 란에 붙여넣기 하시면 됩니다.</div>
+                <div className="p-2.5 rounded-lg bg-zinc-950/70 border border-zinc-800 text-[11px] text-zinc-400 space-y-1.5">
+                  <div>* <strong>드래그 등록:</strong> 위 녹색 <strong>[이미지추출기]</strong> 버튼을 마우스로 잡고 상단 북마크바(Ctrl+Shift+B)로 끌어다 놓으세요.</div>
+                  <div className="text-zinc-500">* <strong>크롬/엣지 안내:</strong> 브라우저 보안 정책상 자바스크립트 북마크는 드래그 시 이름이 공백으로 등록될 수 있습니다. 드래그 후 등록된 북마크 우클릭 ➔ <strong>[수정]</strong>에서 이름을 <code>이미지추출기</code>로 적어주시거나, 옆의 <strong>[코드 복사]</strong> 버튼 클릭 후 북마크바 빈 곳 우클릭 ➔ <strong>[페이지 추가]</strong>(이름: 이미지추출기, URL: 붙여넣기)를 하시면 가장 확실하게 등록됩니다.</div>
                 </div>
               </div>
 

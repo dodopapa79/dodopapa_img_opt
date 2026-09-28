@@ -95,9 +95,31 @@ export default function App() {
         }
       };
 
+      // Periodic & focus check for transfer-images API
+      let lastTimestamp = 0;
+      const checkServerTransfer = async () => {
+        try {
+          const res = await fetch('/api/transfer-images');
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && data.timestamp && data.timestamp > lastTimestamp) {
+              lastTimestamp = data.timestamp;
+              setActiveTab('extractor');
+            }
+          }
+        } catch {
+          // ignore
+        }
+      };
+
       window.addEventListener('message', handleWindowMessage);
+      window.addEventListener('focus', checkServerTransfer);
+      const poll = setInterval(checkServerTransfer, 2000);
+
       return () => {
         window.removeEventListener('message', handleWindowMessage);
+        window.removeEventListener('focus', checkServerTransfer);
+        clearInterval(poll);
       };
     }
   }, []);

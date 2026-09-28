@@ -464,8 +464,74 @@ async function startServer() {
     }
   });
 
+  // Helper: Resilient multi-attempt image fetch with specific referers and fallback
+  async function fetchImageBufferWithFallbacks(targetUrl: string): Promise<{ buffer: Buffer; contentType: string }> {
+    const u = new URL(targetUrl);
+    const lowUrl = targetUrl.toLowerCase();
+
+    // Determine smart candidate referers to try in order
+    let referersToTry: (string | undefined)[] = [];
+    if (lowUrl.includes('coupangcdn.com') || lowUrl.includes('coupang.com')) {
+      referersToTry = ['https://www.coupang.com/', undefined];
+    } else if (lowUrl.includes('blogfiles.pstatic.net') || lowUrl.includes('postfiles.pstatic.net') || lowUrl.includes('blog.naver.com')) {
+      referersToTry = ['https://blog.naver.com/', undefined, 'https://smartstore.naver.com/'];
+    } else if (lowUrl.includes('pstatic.net') || lowUrl.includes('naver.com')) {
+      referersToTry = ['https://smartstore.naver.com/', 'https://blog.naver.com/', undefined];
+    } else if (lowUrl.includes('alicdn.com') || lowUrl.includes('aliexpress.com')) {
+      referersToTry = ['https://www.aliexpress.com/', undefined];
+    } else if (lowUrl.includes('daumcdn.net') || lowUrl.includes('kakaocdn.net')) {
+      referersToTry = ['https://tistory.com/', undefined];
+    } else if (lowUrl.includes('011st.com') || lowUrl.includes('11st.co.kr')) {
+      referersToTry = ['https://www.11st.co.kr/', undefined];
+    } else if (lowUrl.includes('gmarket.co.kr')) {
+      referersToTry = ['https://www.gmarket.co.kr/', undefined];
+    } else {
+      referersToTry = [undefined, `${u.protocol}//${u.host}/`];
+    }
+
+    let lastError: any = null;
+    for (const referer of referersToTry) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        const headers: Record<string, string> = {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+          'Sec-Fetch-Dest': 'image',
+          'Sec-Fetch-Mode': 'no-cors',
+        };
+        if (referer) {
+          headers['Referer'] = referer;
+        }
+
+        const res = await fetch(targetUrl, {
+          signal: controller.signal,
+          headers,
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || 'image/jpeg';
+          const ab = await res.arrayBuffer();
+          return { buffer: Buffer.from(ab), contentType };
+        } else {
+          lastError = new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+      } catch (e: any) {
+        lastError = e;
+      }
+    }
+
+    throw lastError || new Error('Failed to fetch image with all referers');
+  }
+
   // API 3: Smart Image Proxy with custom Referers (bypasses Hotlink Protection on Coupang, Naver, Ali)
   app.get('/api/proxy-image', async (req: Request, res: Response) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+
     const targetUrl = req.query.url;
     if (!targetUrl || typeof targetUrl !== 'string') {
       res.status(400).send('Missing url parameter');
@@ -473,56 +539,87 @@ async function startServer() {
     }
 
     try {
-      const u = new URL(targetUrl);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
-
-      // Custom Referer according to CDN domain (only for sites that strictly require their own referer)
-      let referer: string | undefined = undefined;
-      const lowUrl = targetUrl.toLowerCase();
-      if (lowUrl.includes('coupangcdn.com') || lowUrl.includes('coupang.com')) {
-        referer = 'https://www.coupang.com/';
-      } else if (lowUrl.includes('pstatic.net') || lowUrl.includes('naver.com')) {
-        referer = 'https://smartstore.naver.com/';
-      } else if (lowUrl.includes('alicdn.com') || lowUrl.includes('aliexpress.com')) {
-        referer = 'https://www.aliexpress.com/';
-      } else if (lowUrl.includes('011st.com') || lowUrl.includes('11st.co.kr')) {
-        referer = 'https://www.11st.co.kr/';
-      } else if (lowUrl.includes('gmarket.co.kr')) {
-        referer = 'https://www.gmarket.co.kr/';
-      }
-
-      const headers: Record<string, string> = {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-      };
-      if (referer) {
-        headers['Referer'] = referer;
-      }
-
-      const imageResponse = await fetch(targetUrl, {
-        signal: controller.signal,
-        headers,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!imageResponse.ok) {
-        res.status(imageResponse.status).send(`Failed to fetch image: ${imageResponse.statusText}`);
-        return;
-      }
-
-      const contentType = imageResponse.headers.get('content-type') || 'application/octet-stream';
+      const { buffer, contentType } = await fetchImageBufferWithFallbacks(targetUrl);
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=86400');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-
-      const arrayBuffer = await imageResponse.arrayBuffer();
-      res.send(Buffer.from(arrayBuffer));
+      res.send(buffer);
     } catch (err: any) {
       res.status(500).send(`Image proxy error: ${err.message}`);
     }
+  });
+
+  // API 4: Direct Attachment Downloader (bypasses browser CORS when downloading individual images)
+  app.get('/api/download-file', async (req: Request, res: Response) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const targetUrl = req.query.url;
+    const rawFilename = (req.query.filename as string) || 'image.jpg';
+    if (!targetUrl || typeof targetUrl !== 'string') {
+      res.status(400).send('Missing url parameter');
+      return;
+    }
+
+    try {
+      const { buffer, contentType } = await fetchImageBufferWithFallbacks(targetUrl);
+      const encodedFilename = encodeURIComponent(rawFilename);
+      res.setHeader('Content-Type', contentType);
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`
+      );
+      res.send(buffer);
+    } catch (err: any) {
+      res.status(500).send(`Download file error: ${err.message}`);
+    }
+  });
+
+  // API 5: Bookmarklet Cross-Domain Transfer Store
+  interface TransferSession {
+    title: string;
+    pageUrl: string;
+    images: string[];
+    timestamp: number;
+  }
+  let latestTransferSession: TransferSession | null = null;
+
+  app.options('/api/transfer-images', (_req: Request, res: Response) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.sendStatus(204);
+  });
+
+  app.post('/api/transfer-images', express.json({ limit: '20mb' }), (req: Request, res: Response) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    const { title, pageUrl, images } = req.body || {};
+    if (Array.isArray(images) && images.length > 0) {
+      latestTransferSession = {
+        title: title || '추출된 이미지 목록',
+        pageUrl: pageUrl || '',
+        images,
+        timestamp: Date.now(),
+      };
+      res.json({ success: true, count: images.length, timestamp: latestTransferSession.timestamp });
+    } else {
+      res.status(400).json({ success: false, error: 'No images provided' });
+    }
+  });
+
+  app.get('/api/transfer-images', (req: Request, res: Response) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (!latestTransferSession) {
+      res.json({ success: false, images: [] });
+      return;
+    }
+    res.json({
+      success: true,
+      title: latestTransferSession.title,
+      pageUrl: latestTransferSession.pageUrl,
+      images: latestTransferSession.images,
+      timestamp: latestTransferSession.timestamp,
+    });
   });
 
   // Serve Frontend: Dev with Vite middlewares, Prod with static dist
