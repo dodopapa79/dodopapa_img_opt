@@ -477,8 +477,8 @@ async function startServer() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-      // Custom Referer according to CDN domain
-      let referer = `${u.protocol}//${u.host}/`;
+      // Custom Referer according to CDN domain (only for sites that strictly require their own referer)
+      let referer: string | undefined = undefined;
       const lowUrl = targetUrl.toLowerCase();
       if (lowUrl.includes('coupangcdn.com') || lowUrl.includes('coupang.com')) {
         referer = 'https://www.coupang.com/';
@@ -492,14 +492,18 @@ async function startServer() {
         referer = 'https://www.gmarket.co.kr/';
       }
 
+      const headers: Record<string, string> = {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      };
+      if (referer) {
+        headers['Referer'] = referer;
+      }
+
       const imageResponse = await fetch(targetUrl, {
         signal: controller.signal,
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          Referer: referer,
-          Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-        },
+        headers,
       });
 
       clearTimeout(timeoutId);

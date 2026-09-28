@@ -141,7 +141,7 @@ export function parseImagesFromHtmlClient(html: string, pageUrl = 'https://custo
       id: `ext-img-${images.length + 1}`,
       url: finalUrl,
       originalUrl: highRes !== normalized ? normalized : undefined,
-      previewUrl: `/api/proxy-image?url=${encodeURIComponent(finalUrl)}`,
+      previewUrl: finalUrl,
       alt: alt ? alt.trim() : '',
       format: detectFormatFromUrl(finalUrl),
       type,
@@ -263,7 +263,7 @@ export function parseImagesFromRawText(text: string): ExtractionResult {
       id: `ext-img-${images.length + 1}`,
       url: finalUrl,
       originalUrl: highRes !== rawUrl ? rawUrl : undefined,
-      previewUrl: `/api/proxy-image?url=${encodeURIComponent(finalUrl)}`,
+      previewUrl: finalUrl,
       alt: '입력된 이미지',
       format: detectFormatFromUrl(finalUrl),
       type: 'img',
@@ -547,22 +547,25 @@ export function generateBookmarkletCode(appUrl: string): string {
 
     var btnOpen = document.createElement("button");
     btnOpen.style.cssText = "width:100%!important;padding:12px 16px!important;background:#10b981!important;color:#fff!important;border:none!important;border-radius:12px!important;font-weight:700!important;font-size:13px!important;cursor:pointer!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;box-shadow:0 4px 12px rgba(16,185,129,0.3)!important;";
-    btnOpen.innerHTML = "🚀 이미지 일괄 다운로드 (최적화기에서 열기)";
+    btnOpen.innerHTML = "🚀 이미지추출기에서 열기";
     btnOpen.onclick = function() {
       try { navigator.clipboard.writeText(urls.join("\\n")); } catch(e) {}
       var targetUrl = APP_URL + "?mode=extractor&source=bookmarklet";
-      var win = window.open(targetUrl, "_blank");
+      var win = window.open(targetUrl, "AIS_IMAGE_EXTRACTOR_MAIN");
       if (win) {
+        try { win.focus(); } catch(e) {}
         var cnt = 0;
         var tmr = setInterval(function() {
           cnt++;
-          win.postMessage({
-            type: "AIS_IMAGES_TRANSFER",
-            payload: { title: document.title, pageUrl: location.href, images: urls }
-          }, "*");
-          if (cnt > 30) clearInterval(tmr);
-        }, 400);
-        btnOpen.innerHTML = "✓ 전송 완료! 새 탭을 확인하세요";
+          try {
+            win.postMessage({
+              type: "AIS_IMAGES_TRANSFER",
+              payload: { title: document.title, pageUrl: location.href, images: urls }
+            }, "*");
+          } catch(e) {}
+          if (cnt > 35) clearInterval(tmr);
+        }, 300);
+        btnOpen.innerHTML = "✓ 이미지추출기로 전송 완료!";
       } else {
         alert("브라우저 팝업이 차단되었습니다. 주소창 우측에서 팝업 허용을 눌러주세요!");
       }

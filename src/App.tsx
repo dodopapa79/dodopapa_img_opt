@@ -75,6 +75,33 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const isInitialMount = useRef(true);
 
+  // Set window name so external bookmarklets can target this existing window/tab directly
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.name = 'AIS_IMAGE_EXTRACTOR_MAIN';
+
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('mode') === 'extractor' || params.get('tab') === 'extractor') {
+          setActiveTab('extractor');
+        }
+      } catch {
+        // ignore
+      }
+
+      const handleWindowMessage = (event: MessageEvent) => {
+        if (event.data && event.data.type === 'AIS_IMAGES_TRANSFER') {
+          setActiveTab('extractor');
+        }
+      };
+
+      window.addEventListener('message', handleWindowMessage);
+      return () => {
+        window.removeEventListener('message', handleWindowMessage);
+      };
+    }
+  }, []);
+
   // Calculate ratio multiplier
   const getRatioMultiplier = (ratio: AspectRatioOption): number | undefined => {
     switch (ratio) {

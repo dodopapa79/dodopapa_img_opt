@@ -28,6 +28,8 @@ import {
   HelpCircle,
   MousePointerClick,
   ShoppingBag,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { ExtractedImageItem, ExtractionResult } from '../types';
 import {
@@ -613,11 +615,13 @@ export function WebImageExtractor({
                     ref={bookmarkletAnchorRef}
                     href={bookmarkletCode}
                     draggable
+                    title="이미지추출기"
                     onMouseEnter={syncBookmarkletHref}
                     onFocus={syncBookmarkletHref}
                     onDragStart={(e) => {
                       syncBookmarkletHref();
                       try {
+                        e.dataTransfer.setData('text/html', `<a href="${bookmarkletCode}">이미지추출기</a>`);
                         e.dataTransfer.setData('text/uri-list', bookmarkletCode);
                         e.dataTransfer.setData('text/plain', bookmarkletCode);
                       } catch {
@@ -633,11 +637,14 @@ export function WebImageExtractor({
                         alert('실행 테스트: ' + err.message);
                       }
                     }}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md cursor-grab active:cursor-grabbing border border-emerald-400 transition-colors"
-                    title="이 버튼을 브라우저 북마크바로 끌어다 놓으세요 (클릭 시 현재 페이지에서 테스트)"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md cursor-grab active:cursor-grabbing border border-emerald-400 transition-all hover:scale-[1.02]"
                   >
-                    <Bookmark className="w-4 h-4 fill-white" />
-                    <span>⚡ 이미지 추출기 (여기를 드래그)</span>
+                    <img
+                      src="/profile-logo.png"
+                      alt="이미지추출기"
+                      className="w-5 h-5 rounded-md object-contain bg-white/20 p-0.5 shrink-0"
+                    />
+                    <span>이미지추출기</span>
                   </a>
 
                   <button
@@ -665,8 +672,8 @@ export function WebImageExtractor({
                 </div>
 
                 <div className="p-2.5 rounded-lg bg-zinc-950/70 border border-zinc-800 text-[11px] text-zinc-400 space-y-1">
-                  <div>* <strong>드래그 방법:</strong> 위 녹색 버튼을 꾹 누른 채 브라우저 주소창 바로 밑 북마크바로 끌어다 놓으시면 됩니다.</div>
-                  <div>* <strong>수동 등록:</strong> 드래그가 안 될 땐 [코드 복사] 후 북마크바 빈 곳 우클릭 ➔ [페이지 추가]에서 URL(주소) 란에 붙여넣기 하시면 됩니다.</div>
+                  <div>* <strong>드래그 방법:</strong> 위 <strong>[이미지추출기]</strong> 버튼을 마우스로 잡고 상단 북마크바(Ctrl+Shift+B)로 끌어다 놓으시면 이름과 아이콘이 자동 등록됩니다.</div>
+                  <div>* <strong>수동 등록:</strong> 드래그가 안 될 땐 [코드 복사] 후 북마크바 빈 곳 우클릭 ➔ [페이지 추가]에서 이름에 <code>이미지추출기</code>, URL(주소) 란에 붙여넣기 하시면 됩니다.</div>
                 </div>
               </div>
 
@@ -679,7 +686,7 @@ export function WebImageExtractor({
                   <h4 className="font-bold text-sm text-white">원하는 웹페이지에서 북마크 클릭!</h4>
                 </div>
                 <p className="text-zinc-300 text-xs leading-relaxed">
-                  이미지를 추출하고 싶은 웹페이지를 열고 등록해둔 <strong>[⚡ 이미지 추출기] 북마크를 클릭하세요.</strong>
+                  이미지를 추출하고 싶은 웹페이지를 열고 등록해둔 <strong>[이미지추출기] 북마크를 클릭하세요.</strong>
                 </p>
 
                 <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800/80 space-y-1.5">
@@ -688,7 +695,7 @@ export function WebImageExtractor({
                     <span>화면 가운데에 이미지 추출 팝업창이 즉시 열립니다!</span>
                   </div>
                   <p className="text-zinc-400 text-[11px] leading-relaxed">
-                    팝업창에서 <strong>[🚀 이미지 일괄 다운로드]</strong>를 누르면 모든 고화질 이미지를 ZIP 파일로 즉시 다운로드할 수 있습니다.
+                    팝업창에서 <strong>[🚀 이미지추출기에서 열기]</strong>를 누르면 기존 이미지추출기 창으로 이미지가 즉시 전송되어 일괄 최적화 및 ZIP 다운로드를 진행할 수 있습니다.
                   </p>
                 </div>
 
@@ -1061,135 +1068,25 @@ export function WebImageExtractor({
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-              {filteredImages.map((img) => {
-                const dims = imageDims[img.id];
-                const isSelected = Boolean(img.selected);
-
-                return (
-                  <div
-                    key={img.id}
-                    onClick={() => handleToggleSelect(img.id)}
-                    className={`group relative bg-white rounded-xl border transition-all overflow-hidden flex flex-col cursor-pointer ${
-                      isSelected
-                        ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
-                        : 'border-zinc-200 hover:border-zinc-300 hover:shadow-sm'
-                    }`}
-                  >
-                    {/* Checkbox badge top-left */}
-                    <div className="absolute top-2 left-2 z-10">
-                      <div
-                        className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
-                          isSelected
-                            ? 'bg-emerald-500 text-white shadow-sm'
-                            : 'bg-black/40 text-white/80 backdrop-blur-xs group-hover:bg-black/60'
-                        }`}
-                      >
-                        {isSelected ? <Check className="w-4 h-4 stroke-[3]" /> : null}
-                      </div>
-                    </div>
-
-                    {/* Badges top-right */}
-                    <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1">
-                      <div className="flex items-center gap-1">
-                        {img.isHighRes && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-600 text-white shadow-xs">
-                            고화질 원본
-                          </span>
-                        )}
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-black/75 text-white backdrop-blur-xs">
-                          {img.format}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Image Preview Container with no-referrer policy */}
-                    <div className="relative aspect-square w-full bg-zinc-100 flex items-center justify-center overflow-hidden">
-                      <img
-                        src={img.previewUrl || img.url}
-                        alt={img.alt || '추출 이미지'}
-                        referrerPolicy="no-referrer"
-                        loading="lazy"
-                        onLoad={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          if (target.naturalWidth && target.naturalHeight) {
-                            setImageDims((prev) => ({
-                              ...prev,
-                              [img.id]: {
-                                width: target.naturalWidth,
-                                height: target.naturalHeight,
-                              },
-                            }));
-                          }
-                        }}
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          if (target.src !== img.url) {
-                            target.src = img.url;
-                          }
-                        }}
-                        className="w-full h-full object-contain p-1 group-hover:scale-105 transition-transform duration-200"
-                      />
-
-                      {/* Hover Action Overlay */}
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 pointer-events-none">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setLightboxImage(img);
-                          }}
-                          className="p-2 rounded-xl bg-white/90 text-black hover:bg-white shadow-lg pointer-events-auto transition-transform hover:scale-110"
-                          title="원본 크게 보기"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDownloadSingle(img);
-                          }}
-                          className="p-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg pointer-events-auto transition-transform hover:scale-110"
-                          title="이 이미지 즉시 다운로드"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Footer Info */}
-                    <div className="p-2.5 bg-white flex flex-col justify-between gap-1 flex-1 border-t border-zinc-100">
-                      <p
-                        className="text-xs text-zinc-800 font-medium truncate"
-                        title={img.alt || img.url}
-                      >
-                        {img.alt || img.url.split('/').pop()?.split('?')[0] || '이미지'}
-                      </p>
-
-                      <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono">
-                        <span>
-                          {dims ? `${dims.width}×${dims.height}` : '크기 확인 중...'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCopyUrl(img.url);
-                          }}
-                          className="text-zinc-400 hover:text-zinc-700 p-0.5"
-                          title="이미지 URL 주소 복사"
-                        >
-                          {copyFeedback === img.url ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-500" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {filteredImages.map((img) => (
+                <ImageGridCard
+                  key={img.id}
+                  img={img}
+                  dims={imageDims[img.id]}
+                  isSelected={Boolean(img.selected)}
+                  onToggleSelect={handleToggleSelect}
+                  onOpenLightbox={setLightboxImage}
+                  onDownloadSingle={handleDownloadSingle}
+                  onCopyUrl={handleCopyUrl}
+                  copyFeedback={copyFeedback}
+                  onDimensionsLoaded={(id, width, height) => {
+                    setImageDims((prev) => ({
+                      ...prev,
+                      [id]: { width, height },
+                    }));
+                  }}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -1233,75 +1130,460 @@ export function WebImageExtractor({
         </div>
       )}
 
-      {/* Lightbox Modal */}
+      {/* Lightbox Modal with Multi-layer Recovery */}
       {lightboxImage && (
+        <LightboxModal
+          image={lightboxImage}
+          images={filteredImages}
+          onClose={() => setLightboxImage(null)}
+          onSelectImage={setLightboxImage}
+          onDownloadSingle={handleDownloadSingle}
+          onSendToOptimizer={onSendToOptimizer ? async (img) => {
+            try {
+              const blob = await fetchImageBlob(img.url);
+              const filename = img.alt ? `${img.alt}.${img.format}` : `extracted-${img.id}.${img.format}`;
+              const file = blobToFile(blob, filename);
+              onSendToOptimizer([file]);
+            } catch (err: any) {
+              alert('최적화기 전송 실패: ' + (err.message || '이미지를 불러올 수 없습니다.'));
+            }
+          } : undefined}
+          onCopyUrl={handleCopyUrl}
+          copyFeedback={copyFeedback}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Individual Image Card with Automatic Proxy Fallback & Click-to-Preview
+ */
+function ImageGridCard({
+  img,
+  dims,
+  isSelected,
+  onToggleSelect,
+  onOpenLightbox,
+  onDownloadSingle,
+  onCopyUrl,
+  copyFeedback,
+  onDimensionsLoaded,
+}: {
+  key?: React.Key;
+  img: ExtractedImageItem;
+  dims?: { width: number; height: number };
+  isSelected: boolean;
+  onToggleSelect: (id: string) => void;
+  onOpenLightbox: (img: ExtractedImageItem) => void;
+  onDownloadSingle: (img: ExtractedImageItem) => void;
+  onCopyUrl: (url: string) => void;
+  copyFeedback: string | null;
+  onDimensionsLoaded: (id: string, width: number, height: number) => void;
+}) {
+  const [currentSrc, setCurrentSrc] = useState(img.url);
+  const [hasError, setHasError] = useState(false);
+  const triedProxyRef = useRef(false);
+
+  useEffect(() => {
+    setCurrentSrc(img.url);
+    setHasError(false);
+    triedProxyRef.current = false;
+  }, [img.url]);
+
+  const handleError = () => {
+    if (!triedProxyRef.current) {
+      triedProxyRef.current = true;
+      setCurrentSrc(`/api/proxy-image?url=${encodeURIComponent(img.url)}`);
+    } else {
+      setHasError(true);
+    }
+  };
+
+  return (
+    <div
+      className={`group relative bg-white rounded-xl border transition-all overflow-hidden flex flex-col ${
+        isSelected
+          ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
+          : 'border-zinc-200 hover:border-zinc-300 hover:shadow-sm'
+      }`}
+    >
+      {/* Checkbox badge top-left */}
+      <div
+        className="absolute top-2 left-2 z-20 cursor-pointer"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleSelect(img.id);
+        }}
+        title={isSelected ? '선택 해제' : '선택'}
+      >
         <div
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
-          onClick={() => setLightboxImage(null)}
+          className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
+            isSelected
+              ? 'bg-emerald-500 text-white shadow-sm'
+              : 'bg-black/45 text-white/90 backdrop-blur-xs hover:bg-black/70'
+          }`}
         >
-          <div
-            className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden text-white shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+          {isSelected ? <Check className="w-4 h-4 stroke-[3]" /> : null}
+        </div>
+      </div>
+
+      {/* Badges top-right */}
+      <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1 pointer-events-none">
+        <div className="flex items-center gap-1">
+          {img.isHighRes && (
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-600 text-white shadow-xs">
+              고화질 원본
+            </span>
+          )}
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-black/75 text-white backdrop-blur-xs">
+            {img.format}
+          </span>
+        </div>
+      </div>
+
+      {/* Image Preview Container with Click-to-Lightbox */}
+      <div
+        onClick={() => onOpenLightbox(img)}
+        className="relative aspect-square w-full bg-zinc-100 flex items-center justify-center overflow-hidden cursor-pointer"
+        title="클릭하여 크게 보기"
+      >
+        {hasError ? (
+          <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center bg-zinc-50 hover:bg-zinc-100 transition-colors">
+            <ImageIcon className="w-7 h-7 text-zinc-300 mb-1" />
+            <span className="text-[11px] font-semibold text-zinc-600">미리보기 제한</span>
+            <span className="text-[10px] text-emerald-600 font-medium mt-0.5 flex items-center gap-1">
+              <Eye className="w-3 h-3" /> 클릭하여 확인
+            </span>
+          </div>
+        ) : (
+          <img
+            src={currentSrc}
+            alt={img.alt || '추출 이미지'}
+            referrerPolicy="no-referrer"
+            loading="lazy"
+            onLoad={(e) => {
+              const target = e.target as HTMLImageElement;
+              if (target.naturalWidth && target.naturalHeight) {
+                onDimensionsLoaded(img.id, target.naturalWidth, target.naturalHeight);
+              }
+            }}
+            onError={handleError}
+            className="w-full h-full object-contain p-1 group-hover:scale-105 transition-transform duration-200"
+          />
+        )}
+
+        {/* Hover Action Overlay */}
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 pointer-events-none">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenLightbox(img);
+            }}
+            className="p-2 rounded-xl bg-white/95 text-black hover:bg-white shadow-lg pointer-events-auto transition-transform hover:scale-110"
+            title="원본 크게 보기"
           >
-            {/* Header */}
-            <div className="h-12 px-4 border-b border-zinc-800 flex items-center justify-between shrink-0 bg-zinc-900">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="font-bold text-xs sm:text-sm truncate">
-                  {lightboxImage.alt || '이미지 미리보기'}
-                </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono uppercase">
-                  {lightboxImage.format}
-                </span>
-                {lightboxImage.isHighRes && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-600 text-white font-bold">
-                    고화질 원본
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleDownloadSingle(lightboxImage)}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>다운로드</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLightboxImage(null)}
-                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+            <Eye className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDownloadSingle(img);
+            }}
+            className="p-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg pointer-events-auto transition-transform hover:scale-110"
+            title="이 이미지 즉시 다운로드"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
 
-            {/* Image Preview Container */}
-            <div className="flex-1 bg-black p-4 flex items-center justify-center overflow-auto min-h-[300px]">
-              <img
-                src={lightboxImage.previewUrl || lightboxImage.url}
-                alt={lightboxImage.alt}
-                referrerPolicy="no-referrer"
-                className="max-h-[65vh] max-w-full object-contain rounded-lg shadow-lg"
-              />
-            </div>
+      {/* Footer Info (Clicking selects/deselects item) */}
+      <div
+        onClick={() => onToggleSelect(img.id)}
+        className="p-2.5 bg-white flex flex-col justify-between gap-1 flex-1 border-t border-zinc-100 cursor-pointer"
+      >
+        <p className="text-xs text-zinc-800 font-medium truncate" title={img.alt || img.url}>
+          {img.alt || img.url.split('/').pop()?.split('?')[0] || '이미지'}
+        </p>
 
-            {/* Footer with URL */}
-            <div className="p-3 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between text-xs text-zinc-400 gap-2">
-              <span className="font-mono truncate">{lightboxImage.url}</span>
+        <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono">
+          <span>{dims ? `${dims.width}×${dims.height}` : '크기 확인 중...'}</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCopyUrl(img.url);
+            }}
+            className="text-zinc-400 hover:text-zinc-700 p-0.5"
+            title="이미지 URL 주소 복사"
+          >
+            {copyFeedback === img.url ? (
+              <Check className="w-3.5 h-3.5 text-emerald-500" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Enhanced Lightbox Modal with Direct Loading, Smart Proxy Fallback,
+ * Navigation Controls, and Fail-Safe "Open in New Tab" Link
+ */
+function LightboxModal({
+  image,
+  images,
+  onClose,
+  onSelectImage,
+  onDownloadSingle,
+  onSendToOptimizer,
+  onCopyUrl,
+  copyFeedback,
+}: {
+  image: ExtractedImageItem;
+  images: ExtractedImageItem[];
+  onClose: () => void;
+  onSelectImage: (img: ExtractedImageItem) => void;
+  onDownloadSingle: (img: ExtractedImageItem) => void;
+  onSendToOptimizer?: (img: ExtractedImageItem) => void;
+  onCopyUrl: (url: string) => void;
+  copyFeedback: string | null;
+}) {
+  const [currentSrc, setCurrentSrc] = useState(image.url);
+  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const triedProxyRef = useRef(false);
+
+  const currentIndex = images.findIndex((item) => item.id === image.id);
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex >= 0 && currentIndex < images.length - 1;
+
+  useEffect(() => {
+    setCurrentSrc(image.url);
+    setStatus('loading');
+    triedProxyRef.current = false;
+  }, [image.url]);
+
+  // Handle keyboard shortcuts (Esc, Left, Right)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      } else if (e.key === 'ArrowLeft' && hasPrev) {
+        onSelectImage(images[currentIndex - 1]);
+      } else if (e.key === 'ArrowRight' && hasNext) {
+        onSelectImage(images[currentIndex + 1]);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentIndex, hasNext, hasPrev, images, onClose, onSelectImage]);
+
+  const handleError = () => {
+    if (!triedProxyRef.current) {
+      triedProxyRef.current = true;
+      setCurrentSrc(`/api/proxy-image?url=${encodeURIComponent(image.url)}`);
+    } else {
+      setStatus('error');
+    }
+  };
+
+  const handleRetry = () => {
+    triedProxyRef.current = false;
+    setStatus('loading');
+    setCurrentSrc(image.url);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden text-white shadow-2xl relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="h-13 px-4 border-b border-zinc-800 flex items-center justify-between shrink-0 bg-zinc-900/90 gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-bold text-xs sm:text-sm truncate">
+              {image.alt || '이미지 미리보기'}
+            </span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono uppercase shrink-0">
+              {image.format}
+            </span>
+            {image.isHighRes && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-600 text-white font-bold shrink-0">
+                고화질 원본
+              </span>
+            )}
+            {images.length > 1 && (
+              <span className="text-[11px] text-zinc-400 font-mono shrink-0 ml-1">
+                ({currentIndex + 1}/{images.length})
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <a
+              href={image.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors"
+              title="새 탭에서 원본 이미지 직접 열기"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">새 탭에서 열기</span>
+            </a>
+
+            {onSendToOptimizer && (
               <button
                 type="button"
-                onClick={() => handleCopyUrl(lightboxImage.url)}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors shrink-0"
+                onClick={() => onSendToOptimizer(image)}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-colors"
+                title="이미지 일괄 최적화기로 전송"
               >
-                <Copy className="w-3.5 h-3.5" />
-                <span>주소 복사</span>
+                <Sparkles className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">최적화기로 전송</span>
               </button>
-            </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => onDownloadSingle(image)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>다운로드</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors ml-1"
+              title="닫기 (Esc)"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Main Image Stage */}
+        <div className="flex-1 bg-black p-4 flex items-center justify-center overflow-auto min-h-[350px] relative select-none">
+          {/* Navigation Arrows */}
+          {hasPrev && (
+            <button
+              type="button"
+              onClick={() => onSelectImage(images[currentIndex - 1])}
+              className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white flex items-center justify-center shadow-lg border border-zinc-700 transition-all hover:scale-110"
+              title="이전 이미지 (←)"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
+
+          {hasNext && (
+            <button
+              type="button"
+              onClick={() => onSelectImage(images[currentIndex + 1])}
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white flex items-center justify-center shadow-lg border border-zinc-700 transition-all hover:scale-110"
+              title="다음 이미지 (→)"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          )}
+
+          {/* Loading Indicator */}
+          {status === 'loading' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 z-10">
+              <RefreshCw className="w-7 h-7 text-emerald-400 animate-spin" />
+              <span className="text-xs text-zinc-400">이미지 로딩 중...</span>
+            </div>
+          )}
+
+          {/* Error State Fallback */}
+          {status === 'error' ? (
+            <div className="max-w-md w-full p-6 rounded-2xl bg-zinc-900/90 border border-zinc-800 text-center space-y-4 shadow-xl">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+                <AlertCircle className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-bold text-sm text-white">미리보기를 불러올 수 없습니다</h4>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  해당 사이트의 외부 핫링크 차단 또는 보안 정책으로 브라우저 프레임 내 직접 표시가 제한되었습니다.
+                  아래 [새 탭에서 원본 보기] 또는 [다운로드]를 이용하시면 원본을 즉시 확인하실 수 있습니다.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                <a
+                  href={image.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>새 탭에서 원본 보기</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => onDownloadSingle(image)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>다운로드 시도</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium border border-zinc-700 transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>다시 시도</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <img
+              src={currentSrc}
+              alt={image.alt || '이미지'}
+              referrerPolicy="no-referrer"
+              onLoad={() => setStatus('loaded')}
+              onError={handleError}
+              className={`max-h-[68vh] max-w-full object-contain rounded-lg shadow-2xl transition-opacity duration-200 ${
+                status === 'loaded' ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+          )}
+        </div>
+
+        {/* Footer with URL & Copy */}
+        <div className="p-3 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between text-xs text-zinc-400 gap-2">
+          <span className="font-mono truncate select-all">{image.url}</span>
+          <button
+            type="button"
+            onClick={() => onCopyUrl(image.url)}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors shrink-0"
+          >
+            {copyFeedback === image.url ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-emerald-400 font-semibold">복사됨</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5" />
+                <span>주소 복사</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
