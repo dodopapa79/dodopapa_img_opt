@@ -531,18 +531,31 @@ async function startServer() {
   app.get('/api/proxy-image', async (req: Request, res: Response) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
 
     const targetUrl = req.query.url;
+    const fallbackUrl = req.query.fallbackUrl as string | undefined;
     if (!targetUrl || typeof targetUrl !== 'string') {
       res.status(400).send('Missing url parameter');
       return;
     }
 
     try {
-      const { buffer, contentType } = await fetchImageBufferWithFallbacks(targetUrl);
-      res.setHeader('Content-Type', contentType);
+      let result;
+      try {
+        result = await fetchImageBufferWithFallbacks(targetUrl);
+      } catch (err) {
+        if (fallbackUrl && fallbackUrl !== targetUrl) {
+          result = await fetchImageBufferWithFallbacks(fallbackUrl);
+        } else {
+          throw err;
+        }
+      }
+
+      res.setHeader('Content-Type', result.contentType);
+      res.setHeader('Content-Length', result.buffer.length.toString());
       res.setHeader('Cache-Control', 'public, max-age=86400');
-      res.send(buffer);
+      res.send(result.buffer);
     } catch (err: any) {
       res.status(500).send(`Image proxy error: ${err.message}`);
     }
@@ -552,6 +565,7 @@ async function startServer() {
   app.get('/api/download-file', async (req: Request, res: Response) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     const targetUrl = req.query.url;
+    const fallbackUrl = req.query.fallbackUrl as string | undefined;
     const rawFilename = (req.query.filename as string) || 'image.jpg';
     if (!targetUrl || typeof targetUrl !== 'string') {
       res.status(400).send('Missing url parameter');
@@ -559,17 +573,78 @@ async function startServer() {
     }
 
     try {
-      const { buffer, contentType } = await fetchImageBufferWithFallbacks(targetUrl);
+      let result;
+      try {
+        result = await fetchImageBufferWithFallbacks(targetUrl);
+      } catch (primaryErr) {
+        if (fallbackUrl && fallbackUrl !== targetUrl) {
+          try {
+            result = await fetchImageBufferWithFallbacks(fallbackUrl);
+          } catch {
+            throw primaryErr;
+          }
+        } else {
+          throw primaryErr;
+        }
+      }
+
       const encodedFilename = encodeURIComponent(rawFilename);
-      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Type', result.contentType);
+      res.setHeader('Content-Length', result.buffer.length.toString());
       res.setHeader(
         'Content-Disposition',
         `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`
       );
-      res.send(buffer);
+      res.send(result.buffer);
     } catch (err: any) {
       res.status(500).send(`Download file error: ${err.message}`);
     }
+  });
+
+  // API 4.5: Batch Image Size Checker
+  const sizeCache = new Map<string, number>();
+
+  app.post('/api/image-sizes', express.json({ limit: '5mb' }), async (req: Request, res: Response) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { urls } = req.body || {};
+    if (!Array.isArray(urls)) {
+      res.status(400).json({ error: 'urls array required' });
+      return;
+    }
+
+    const results: Record<string, number> = {};
+    const toFetch: string[] = [];
+
+    for (const u of urls.slice(0, 60)) {
+      if (typeof u === 'string') {
+        if (sizeCache.has(u)) {
+          results[u] = sizeCache.get(u)!;
+        } else {
+          toFetch.push(u);
+        }
+      }
+    }
+
+    if (toFetch.length > 0) {
+      const concurrency = 6;
+      for (let i = 0; i < toFetch.length; i += concurrency) {
+        const batch = toFetch.slice(i, i + concurrency);
+        await Promise.allSettled(
+          batch.map(async (imgUrl) => {
+            try {
+              const { buffer } = await fetchImageBufferWithFallbacks(imgUrl);
+              const byteLen = buffer.length;
+              sizeCache.set(imgUrl, byteLen);
+              results[imgUrl] = byteLen;
+            } catch {
+              // Ignore failure for size probe
+            }
+          })
+        );
+      }
+    }
+
+    res.json({ sizes: results });
   });
 
   // API 5: Bookmarklet Cross-Domain Transfer Store
@@ -613,13 +688,26 @@ async function startServer() {
       res.json({ success: false, images: [] });
       return;
     }
+    const session = latestTransferSession;
+    if (req.query.consume === '1') {
+      latestTransferSession = null;
+    }
     res.json({
       success: true,
-      title: latestTransferSession.title,
-      pageUrl: latestTransferSession.pageUrl,
-      images: latestTransferSession.images,
-      timestamp: latestTransferSession.timestamp,
+      title: session.title,
+      pageUrl: session.pageUrl,
+      images: session.images,
+      timestamp: session.timestamp,
     });
+  });
+
+  app.post('/api/transfer-images/ack', (req: Request, res: Response) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const { timestamp } = req.body || {};
+    if (latestTransferSession && (!timestamp || latestTransferSession.timestamp <= timestamp)) {
+      latestTransferSession = null;
+    }
+    res.json({ success: true });
   });
 
   // Serve Frontend: Dev with Vite middlewares, Prod with static dist

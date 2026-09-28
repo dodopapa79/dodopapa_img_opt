@@ -43,14 +43,14 @@ import {
   generateBookmarkletCode,
   detectMallType,
 } from '../utils/imageExtractor';
-import { downloadBlob } from '../utils/imageProcessor';
+import { downloadBlob, formatBytes } from '../utils/imageProcessor';
 
 interface WebImageExtractorProps {
   onSendToOptimizer?: (files: File[]) => void;
   onSendToThumbnail?: (imageUrl: string) => void;
 }
 
-type ExtractorMode = 'url' | 'bookmarklet' | 'html' | 'list';
+type ExtractorMode = 'bookmarklet' | 'url' | 'html' | 'list';
 
 const SAMPLE_URLS = [
   { label: 'Unsplash 블로그', url: 'https://unsplash.com/blog' },
@@ -62,8 +62,8 @@ export function WebImageExtractor({
   onSendToOptimizer,
   onSendToThumbnail,
 }: WebImageExtractorProps) {
-  // Mode tabs
-  const [mode, setMode] = useState<ExtractorMode>('url');
+  // Mode tabs - Default to bookmarklet per user request
+  const [mode, setMode] = useState<ExtractorMode>('bookmarklet');
 
   // Input states
   const [inputUrl, setInputUrl] = useState('');
@@ -84,8 +84,13 @@ export function WebImageExtractor({
   const [hideSmallImages, setHideSmallImages] = useState<boolean>(true);
   const [searchKeyword, setSearchKeyword] = useState<string>('');
 
-  // Image natural dimensions cache
+  // Width & Size Category Filters (Slider & Chips)
+  const [minWidthFilter, setMinWidthFilter] = useState<number>(0);
+  const [sizeCategory, setSizeCategory] = useState<'all' | 'thumb' | 'medium' | 'large' | 'ultra'>('all');
+
+  // Image natural dimensions & byte sizes cache
   const [imageDims, setImageDims] = useState<Record<string, { width: number; height: number }>>({});
+  const [imageSizes, setImageSizes] = useState<Record<string, number>>({});
 
   // Lightbox
   const [lightboxImage, setLightboxImage] = useState<ExtractedImageItem | null>(null);
@@ -127,9 +132,28 @@ export function WebImageExtractor({
     syncBookmarkletHref();
   }, [syncBookmarkletHref, mode]);
 
-  const lastProcessedTransferRef = useRef<number>(0);
+  // Load last processed timestamp from sessionStorage so refreshes/tab switches don't re-toast
+  const getStoredTransferTs = (): number => {
+    try {
+      const saved = sessionStorage.getItem('ais_last_transfer_ts');
+      return saved ? parseInt(saved, 10) : 0;
+    } catch {
+      return 0;
+    }
+  };
+  const lastProcessedTransferRef = useRef<number>(getStoredTransferTs());
 
-  // Synchronize incoming images from Bookmarklet via server transfer endpoint or postMessage
+  // Auto-dismiss toast cleanly
+  useEffect(() => {
+    if (successToast) {
+      const t = setTimeout(() => {
+        setSuccessToast(null);
+      }, 3500);
+      return () => clearTimeout(t);
+    }
+  }, [successToast]);
+
+  // Synchronize incoming images from Bookmarklet via server transfer endpoint
   const checkTransferImages = useCallback(async () => {
     try {
       const res = await fetch('/api/transfer-images');
@@ -138,10 +162,20 @@ export function WebImageExtractor({
       if (data && data.success && Array.isArray(data.images) && data.images.length > 0) {
         if (data.timestamp && data.timestamp > lastProcessedTransferRef.current) {
           lastProcessedTransferRef.current = data.timestamp;
+          try {
+            sessionStorage.setItem('ais_last_transfer_ts', data.timestamp.toString());
+          } catch {}
+
+          // Acknowledge session to server
+          fetch('/api/transfer-images/ack', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timestamp: data.timestamp }),
+          }).catch(() => {});
+
           const parsed = parseImagesFromUrlArray(data.images, data.title, data.pageUrl);
           setResult(parsed);
           setSuccessToast(`🎉 ${data.title || '웹페이지'}에서 이미지 ${parsed.totalCount}개를 성공적으로 불러왔습니다!`);
-          setTimeout(() => setSuccessToast(null), 5000);
         }
       }
     } catch {
@@ -153,12 +187,20 @@ export function WebImageExtractor({
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data && event.data.type === 'AIS_IMAGES_TRANSFER' && event.data.payload) {
-        const { title, pageUrl, images: rawList } = event.data.payload;
+        const { title, pageUrl, images: rawList, timestamp } = event.data.payload;
+        const msgTs = timestamp || Date.now();
+        if (msgTs <= lastProcessedTransferRef.current) {
+          return; // Ignore duplicate calls from bookmarklet timer
+        }
+        lastProcessedTransferRef.current = msgTs;
+        try {
+          sessionStorage.setItem('ais_last_transfer_ts', msgTs.toString());
+        } catch {}
+
         if (Array.isArray(rawList) && rawList.length > 0) {
           const parsed = parseImagesFromUrlArray(rawList, title, pageUrl);
           setResult(parsed);
           setSuccessToast(`🎉 ${title || '웹페이지'}에서 이미지 ${parsed.totalCount}개를 브라우저에서 직접 수집했습니다!`);
-          setTimeout(() => setSuccessToast(null), 5000);
         }
       }
     };
@@ -180,7 +222,7 @@ export function WebImageExtractor({
 
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibility);
-    const interval = setInterval(checkTransferImages, 1500);
+    const interval = setInterval(checkTransferImages, 3000);
 
     // If opened via bookmarklet, signal opener window that we are ready
     if (window.opener && window.opener !== window) {
@@ -198,6 +240,60 @@ export function WebImageExtractor({
       clearInterval(interval);
     };
   }, [checkTransferImages]);
+
+  // Fast background probe for natural dimensions and file sizes
+  useEffect(() => {
+    if (!result || !result.images || result.images.length === 0) return;
+
+    // 1. Probe natural dimensions
+    result.images.forEach((img) => {
+      if (imageDims[img.id]) return;
+      const tester = new Image();
+      tester.referrerPolicy = 'no-referrer';
+      tester.onload = () => {
+        if (tester.naturalWidth && tester.naturalHeight) {
+          setImageDims((prev) => ({
+            ...prev,
+            [img.id]: { width: tester.naturalWidth, height: tester.naturalHeight },
+          }));
+        }
+      };
+      tester.onerror = () => {
+        const proxyTester = new Image();
+        proxyTester.onload = () => {
+          if (proxyTester.naturalWidth && proxyTester.naturalHeight) {
+            setImageDims((prev) => ({
+              ...prev,
+              [img.id]: { width: proxyTester.naturalWidth, height: proxyTester.naturalHeight },
+            }));
+          }
+        };
+        proxyTester.src = `/api/proxy-image?url=${encodeURIComponent(img.url)}`;
+      };
+      tester.src = img.url;
+    });
+
+    // 2. Fetch image byte sizes in batch
+    const unmeasuredUrls = result.images
+      .map((img) => img.url)
+      .filter((u) => imageSizes[u] === undefined);
+
+    if (unmeasuredUrls.length > 0) {
+      const batch = unmeasuredUrls.slice(0, 40);
+      fetch('/api/image-sizes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: batch }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data && data.sizes) {
+            setImageSizes((prev) => ({ ...prev, ...data.sizes }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [result]);
 
   // Handle URL Extract
   const handleExtractUrl = async (overrideUrl?: string) => {
@@ -329,14 +425,33 @@ export function WebImageExtractor({
         return false;
       }
 
+      // Dimensions
+      const dims = imageDims[img.id];
+
       // Hide small images (< 60px if dimensions already loaded)
       if (hideSmallImages) {
-        const dims = imageDims[img.id];
         if (dims && (dims.width < 60 || dims.height < 60)) {
           return false;
         }
         if (img.url.includes('1x1') || img.url.includes('spacer') || img.url.includes('tracker')) {
           return false;
+        }
+      }
+
+      // Width Slider Filter (e.g. 500px, 800px+)
+      if (minWidthFilter > 0) {
+        if (dims && dims.width < minWidthFilter) {
+          return false;
+        }
+      }
+
+      // Size Category Filter
+      if (sizeCategory !== 'all') {
+        if (dims) {
+          if (sizeCategory === 'thumb' && dims.width >= 300) return false;
+          if (sizeCategory === 'medium' && (dims.width < 300 || dims.width >= 800)) return false;
+          if (sizeCategory === 'large' && (dims.width < 800 || dims.width >= 1200)) return false;
+          if (sizeCategory === 'ultra' && dims.width < 1200) return false;
         }
       }
 
@@ -350,7 +465,17 @@ export function WebImageExtractor({
 
       return true;
     });
-  }, [result, selectedFormat, selectedType, selectedMall, hideSmallImages, searchKeyword, imageDims]);
+  }, [
+    result,
+    selectedFormat,
+    selectedType,
+    selectedMall,
+    hideSmallImages,
+    minWidthFilter,
+    sizeCategory,
+    searchKeyword,
+    imageDims,
+  ]);
 
   const selectedCount = useMemo(() => {
     return filteredImages.filter((img) => img.selected).length;
@@ -362,9 +487,9 @@ export function WebImageExtractor({
     if (ext === 'image') ext = 'jpg';
     const cleanName = `${img.alt ? img.alt.slice(0, 20).replace(/[^a-zA-Z0-9가-힣_-]/g, '_') : 'image'}_${Date.now()}.${ext}`;
 
-    // 1. Try Blob download (via proxy or in-memory canvas)
+    // 1. Try Blob download (via proxy or in-memory canvas with originalUrl fallback)
     try {
-      const blob = await fetchImageBlob(img.url);
+      const blob = await fetchImageBlob(img.url, img.originalUrl);
       let detectedExt = blob.type ? blob.type.split('/')[1] : '';
       if (detectedExt === 'jpeg') detectedExt = 'jpg';
       if (detectedExt && (ext === 'image' || !ext)) ext = detectedExt;
@@ -374,9 +499,16 @@ export function WebImageExtractor({
       console.warn('Blob fetch failed, falling back to server attachment download...', e);
     }
 
-    // 2. Direct server download endpoint (Content-Disposition: attachment)
+    // 2. Direct server download endpoint (Content-Disposition: attachment) with fallbackUrl
     try {
-      const downloadUrl = `/api/download-file?url=${encodeURIComponent(img.url)}&filename=${encodeURIComponent(cleanName)}`;
+      const params = new URLSearchParams({
+        url: img.url,
+        filename: cleanName,
+      });
+      if (img.originalUrl && img.originalUrl !== img.url) {
+        params.set('fallbackUrl', img.originalUrl);
+      }
+      const downloadUrl = `/api/download-file?${params.toString()}`;
       const link = document.createElement('a');
       link.href = downloadUrl;
       link.download = cleanName;
@@ -390,7 +522,7 @@ export function WebImageExtractor({
 
     // 3. Fallback: Direct browser anchor click
     const a = document.createElement('a');
-    a.href = img.url;
+    a.href = img.originalUrl || img.url;
     a.download = cleanName;
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
@@ -418,9 +550,9 @@ export function WebImageExtractor({
       const cleanTitle = result.pageTitle
         ? result.pageTitle.slice(0, 25).replace(/[^a-zA-Z0-9가-힣_-]/g, '_')
         : 'web_images';
-      await downloadExtractedImagesAsZip(targetImages, `${cleanTitle}_images`);
-      setZipProgress('다운로드 완료!');
-      setTimeout(() => setZipProgress(''), 3000);
+      const stats = await downloadExtractedImagesAsZip(targetImages, `${cleanTitle}_images`);
+      setZipProgress(`다운로드 완료! (${stats.successCount}/${stats.total}개 저장됨)`);
+      setTimeout(() => setZipProgress(''), 3500);
     } catch (err: any) {
       alert(`ZIP 압축 다운로드 실패: ${err.message}`);
     } finally {
@@ -506,21 +638,8 @@ export function WebImageExtractor({
           </div>
         </div>
 
-        {/* Mode Selector Tabs */}
+        {/* Mode Selector Tabs - Bookmarklet is 1st per user request */}
         <div className="mt-5 sm:mt-6 flex flex-wrap items-center gap-1.5 p-1 bg-zinc-950/80 rounded-xl border border-zinc-800">
-          <button
-            type="button"
-            onClick={() => setMode('url')}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
-              mode === 'url'
-                ? 'bg-zinc-800 text-white shadow-sm'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            <Globe className="w-3.5 h-3.5 text-emerald-400" />
-            <span>URL 웹 주소 입력</span>
-          </button>
-
           <button
             type="button"
             onClick={() => setMode('bookmarklet')}
@@ -532,7 +651,20 @@ export function WebImageExtractor({
           >
             <Bookmark className="w-3.5 h-3.5 text-amber-300" />
             <span>⚡ 1초 북마크릿 (원클릭 추출)</span>
-            <span className="px-1.5 py-0.2 rounded bg-amber-400 text-black text-[10px] font-black">추천</span>
+            <span className="px-1.5 py-0.2 rounded bg-amber-400 text-black text-[10px] font-black">추천 1위</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMode('url')}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+              mode === 'url'
+                ? 'bg-zinc-800 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5 text-emerald-400" />
+            <span>URL 웹 주소 입력</span>
           </button>
 
           <button
@@ -562,7 +694,142 @@ export function WebImageExtractor({
           </button>
         </div>
 
-        {/* Tab 1: URL Mode */}
+        {/* Tab 1: Bookmarklet Mode (Default First) */}
+        {mode === 'bookmarklet' && (
+          <div className="mt-4 p-5 rounded-2xl bg-zinc-950 border border-emerald-500/40 text-xs text-zinc-300 space-y-4">
+            {/* Header / Hint */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                <h3 className="font-bold text-sm sm:text-base text-white">⚡ 북마크 하나로 모든 쇼핑몰/웹페이지 이미지 1초 추출</h3>
+              </div>
+              <span className="text-[11px] text-zinc-400">
+                💡 브라우저 상단 북마크바 표시 단축키: <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 font-mono font-bold">Ctrl + Shift + B</kbd>
+              </span>
+            </div>
+
+            {/* 2-Step Ultra Simple Layout */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 1단계: 북마크바에 등록 */}
+              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-500 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                    1
+                  </span>
+                  <h4 className="font-bold text-sm text-white">북마크바에 등록하기</h4>
+                </div>
+                <p className="text-zinc-300 text-xs leading-relaxed">
+                  아래 녹색 <strong>[⚡ 이미지추출기]</strong> 버튼을 마우스로 잡고 브라우저 상단 <strong>북마크바</strong>로 끌어다 놓으세요.
+                </p>
+
+                <div className="pt-1 flex flex-wrap items-center gap-2">
+                  {/* Draggable bookmarklet link */}
+                  <a
+                    ref={bookmarkletAnchorRef}
+                    href={bookmarkletCode}
+                    draggable
+                    title="⚡ 이미지추출기"
+                    aria-label="⚡ 이미지추출기"
+                    onMouseEnter={syncBookmarkletHref}
+                    onFocus={syncBookmarkletHref}
+                    onDragStart={(e) => {
+                      syncBookmarkletHref();
+                      try {
+                        e.dataTransfer.setData('text/html', `<a href="${bookmarkletCode}">⚡ 이미지추출기</a>`);
+                        e.dataTransfer.setData('text/x-moz-url', `${bookmarkletCode}\n⚡ 이미지추출기`);
+                        e.dataTransfer.setData('text/uri-list', bookmarkletCode);
+                        e.dataTransfer.setData('text/plain', bookmarkletCode);
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      try {
+                        const script = bookmarkletCode.replace('javascript:', '');
+                        new Function(script)();
+                      } catch (err: any) {
+                        alert('실행 테스트: ' + err.message);
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md cursor-grab active:cursor-grabbing border border-emerald-400 transition-all hover:scale-[1.02]"
+                  >
+                    <img
+                      src="/profile-logo.png"
+                      alt="이미지추출기"
+                      className="w-5 h-5 rounded-md object-contain bg-white/20 p-0.5 shrink-0"
+                    />
+                    <span>⚡ 이미지추출기</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyBookmarklet}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border ${
+                      copiedBookmarklet
+                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border-zinc-700'
+                    }`}
+                    title="북마크 코드 복사"
+                  >
+                    {copiedBookmarklet ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-200" />
+                        <span>복사 완료!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>코드 복사</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-zinc-950/70 border border-zinc-800 text-[11px] text-zinc-400 space-y-1.5">
+                  <div>* <strong>드래그 등록:</strong> 위 녹색 <strong>[⚡ 이미지추출기]</strong> 버튼을 상단 북마크바(Ctrl+Shift+B)로 끌어다 놓으세요.</div>
+                  <div className="text-zinc-500">* <strong>크롬/엣지 안내:</strong> 브라우저 보안 규정상 자바스크립트 북마크는 기본 별표/문서 아이콘으로 표기됩니다. 드래그 등록이 안 될 경우 <strong>[코드 복사]</strong> 클릭 후 북마크바 빈 곳 우클릭 ➔ <strong>[페이지 추가]</strong>(이름: ⚡ 이미지추출기, URL: 붙여넣기)를 하시면 100% 깔끔하게 등록됩니다.</div>
+                </div>
+              </div>
+
+              {/* 2단계: 원하는 페이지에서 클릭 */}
+              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-500 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                    2
+                  </span>
+                  <h4 className="font-bold text-sm text-white">원하는 웹페이지에서 북마크 클릭!</h4>
+                </div>
+                <p className="text-zinc-300 text-xs leading-relaxed">
+                  이미지를 추출하고 싶은 웹페이지를 열고 등록해둔 <strong>[⚡ 이미지추출기] 북마크를 클릭하세요.</strong>
+                </p>
+
+                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800/80 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-xs">
+                    <Check className="w-3.5 h-3.5" />
+                    <span>화면 가운데에 이미지 추출 팝업창이 즉시 열립니다!</span>
+                  </div>
+                  <p className="text-zinc-400 text-[11px] leading-relaxed">
+                    팝업창에서 <strong>[🚀 이미지추출기에서 열기]</strong>를 누르면 기존 열려있는 이미지추출기 창으로 이미지가 즉시 전송되어 일괄 최적화 및 ZIP 다운로드를 진행할 수 있습니다.
+                  </p>
+                </div>
+
+                <div className="pt-1 flex items-center justify-between text-[11px] text-zinc-400">
+                  <span>* 페이지 본문으로 스크롤을 살짝 내린 후 북마크를 눌러주세요.</span>
+                  <button
+                    type="button"
+                    onClick={() => setMode('url')}
+                    className="text-emerald-400 hover:text-emerald-300 hover:underline font-medium"
+                  >
+                    URL 주소 직접 입력 ➔
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: URL Mode */}
         {mode === 'url' && (
           <div className="mt-4">
             <form
@@ -652,140 +919,6 @@ export function WebImageExtractor({
           </div>
         )}
 
-        {/* Tab 2: Bookmarklet Mode (Chrome Extension alternative) */}
-        {mode === 'bookmarklet' && (
-          <div className="mt-4 p-5 rounded-2xl bg-zinc-950 border border-emerald-500/40 text-xs text-zinc-300 space-y-4">
-            {/* Header / Hint */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <h3 className="font-bold text-sm sm:text-base text-white">⚡ 북마크 하나로 모든 웹페이지 이미지 1초 추출</h3>
-              </div>
-              <span className="text-[11px] text-zinc-400">
-                💡 브라우저 상단 북마크바가 안 보이면: <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 font-mono">Ctrl + Shift + B</kbd>
-              </span>
-            </div>
-
-            {/* 2-Step Ultra Simple Layout */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* 1단계: 북마크바에 등록 */}
-              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-emerald-500 text-white font-bold text-xs flex items-center justify-center shrink-0">
-                    1
-                  </span>
-                  <h4 className="font-bold text-sm text-white">북마크바에 등록하기</h4>
-                </div>
-                <p className="text-zinc-300 text-xs leading-relaxed">
-                  아래 녹색 버튼을 마우스로 잡고 브라우저 상단 <strong>북마크바</strong>로 끌어다 놓으세요.
-                </p>
-
-                <div className="pt-1 flex flex-wrap items-center gap-2">
-                  {/* Draggable bookmarklet link */}
-                  <a
-                    ref={bookmarkletAnchorRef}
-                    href={bookmarkletCode}
-                    draggable
-                    title="이미지추출기"
-                    onMouseEnter={syncBookmarkletHref}
-                    onFocus={syncBookmarkletHref}
-                    onDragStart={(e) => {
-                      syncBookmarkletHref();
-                      try {
-                        e.dataTransfer.setData('text/html', `<a href="${bookmarkletCode}">이미지추출기</a>`);
-                        e.dataTransfer.setData('text/x-moz-url', `${bookmarkletCode}\n이미지추출기`);
-                        e.dataTransfer.setData('text/uri-list', bookmarkletCode);
-                        e.dataTransfer.setData('text/plain', bookmarkletCode);
-                      } catch {
-                        // ignore
-                      }
-                    }}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      try {
-                        const script = bookmarkletCode.replace('javascript:', '');
-                        new Function(script)();
-                      } catch (err: any) {
-                        alert('실행 테스트: ' + err.message);
-                      }
-                    }}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md cursor-grab active:cursor-grabbing border border-emerald-400 transition-all hover:scale-[1.02]"
-                  >
-                    <img
-                      src="/profile-logo.png"
-                      alt="이미지추출기"
-                      className="w-5 h-5 rounded-md object-contain bg-white/20 p-0.5 shrink-0"
-                    />
-                    <span>이미지추출기</span>
-                  </a>
-
-                  <button
-                    type="button"
-                    onClick={handleCopyBookmarklet}
-                    className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border ${
-                      copiedBookmarklet
-                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
-                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border-zinc-700'
-                    }`}
-                    title="북마크 주소 복사"
-                  >
-                    {copiedBookmarklet ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-200" />
-                        <span>복사 완료!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>코드 복사</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <div className="p-2.5 rounded-lg bg-zinc-950/70 border border-zinc-800 text-[11px] text-zinc-400 space-y-1.5">
-                  <div>* <strong>드래그 등록:</strong> 위 녹색 <strong>[이미지추출기]</strong> 버튼을 마우스로 잡고 상단 북마크바(Ctrl+Shift+B)로 끌어다 놓으세요.</div>
-                  <div className="text-zinc-500">* <strong>크롬/엣지 안내:</strong> 브라우저 보안 정책상 자바스크립트 북마크는 드래그 시 이름이 공백으로 등록될 수 있습니다. 드래그 후 등록된 북마크 우클릭 ➔ <strong>[수정]</strong>에서 이름을 <code>이미지추출기</code>로 적어주시거나, 옆의 <strong>[코드 복사]</strong> 버튼 클릭 후 북마크바 빈 곳 우클릭 ➔ <strong>[페이지 추가]</strong>(이름: 이미지추출기, URL: 붙여넣기)를 하시면 가장 확실하게 등록됩니다.</div>
-                </div>
-              </div>
-
-              {/* 2단계: 원하는 페이지에서 클릭 */}
-              <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-emerald-500 text-white font-bold text-xs flex items-center justify-center shrink-0">
-                    2
-                  </span>
-                  <h4 className="font-bold text-sm text-white">원하는 웹페이지에서 북마크 클릭!</h4>
-                </div>
-                <p className="text-zinc-300 text-xs leading-relaxed">
-                  이미지를 추출하고 싶은 웹페이지를 열고 등록해둔 <strong>[이미지추출기] 북마크를 클릭하세요.</strong>
-                </p>
-
-                <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800/80 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-xs">
-                    <Check className="w-3.5 h-3.5" />
-                    <span>화면 가운데에 이미지 추출 팝업창이 즉시 열립니다!</span>
-                  </div>
-                  <p className="text-zinc-400 text-[11px] leading-relaxed">
-                    팝업창에서 <strong>[🚀 이미지추출기에서 열기]</strong>를 누르면 기존 이미지추출기 창으로 이미지가 즉시 전송되어 일괄 최적화 및 ZIP 다운로드를 진행할 수 있습니다.
-                  </p>
-                </div>
-
-                <div className="pt-1 flex items-center justify-between text-[11px] text-zinc-400">
-                  <span>* 페이지 본문으로 스크롤을 살짝 내린 후 북마크를 눌러주세요.</span>
-                  <button
-                    type="button"
-                    onClick={() => setMode('html')}
-                    className="text-amber-400 hover:text-amber-300 hover:underline font-medium"
-                  >
-                    HTML 소스 복사 ➔
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Tab 3: HTML Source Paste Mode */}
         {mode === 'html' && (
           <div className="mt-4 space-y-2">
@@ -855,14 +988,6 @@ export function WebImageExtractor({
           </div>
         )}
       </div>
-
-      {/* Success Toast */}
-      {successToast && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2.5 animate-in fade-in">
-          <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{successToast}</span>
-        </div>
-      )}
 
       {/* Smart Guided Banner for bot blocks */}
       {blockedMallInfo && (
@@ -1029,85 +1154,159 @@ export function WebImageExtractor({
           </div>
 
           {/* Filter Bar */}
-          <div className="bg-white rounded-xl p-3 border border-zinc-200 flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Mall Filter */}
-              <div className="flex items-center gap-1">
-                <span className="text-zinc-400 font-medium">화질:</span>
-                <div className="flex items-center gap-0.5 bg-zinc-100 p-0.5 rounded-lg border border-zinc-200">
-                  {[
-                    { id: 'all', label: '전체' },
-                    { id: 'highres', label: '고화질 원본' },
-                    { id: 'general', label: '일반' },
-                  ].map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setSelectedMall(m.id)}
-                      className={`px-2 py-1 rounded text-xs font-semibold transition-colors ${
-                        selectedMall === m.id
-                          ? 'bg-white text-black shadow-xs'
-                          : 'text-zinc-500 hover:text-zinc-900'
-                      }`}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
+          <div className="bg-white rounded-xl p-3 border border-zinc-200 flex flex-col gap-2.5 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Mall Filter */}
+                <div className="flex items-center gap-1">
+                  <span className="text-zinc-400 font-medium">화질:</span>
+                  <div className="flex items-center gap-0.5 bg-zinc-100 p-0.5 rounded-lg border border-zinc-200">
+                    {[
+                      { id: 'all', label: '전체' },
+                      { id: 'highres', label: '고화질 원본' },
+                      { id: 'general', label: '일반' },
+                    ].map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setSelectedMall(m.id)}
+                        className={`px-2 py-1 rounded text-xs font-semibold transition-colors ${
+                          selectedMall === m.id
+                            ? 'bg-white text-black shadow-xs'
+                            : 'text-zinc-500 hover:text-zinc-900'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Format Filter */}
+                <div className="flex items-center gap-1">
+                  <span className="text-zinc-400 font-medium">포맷:</span>
+                  <div className="flex items-center gap-0.5 bg-zinc-100 p-0.5 rounded-lg border border-zinc-200">
+                    {['all', 'jpg', 'png', 'webp'].map((fmt) => (
+                      <button
+                        key={fmt}
+                        type="button"
+                        onClick={() => setSelectedFormat(fmt)}
+                        className={`px-2 py-1 rounded text-xs font-semibold uppercase transition-colors ${
+                          selectedFormat === fmt
+                            ? 'bg-white text-black shadow-xs'
+                            : 'text-zinc-500 hover:text-zinc-900'
+                        }`}
+                      >
+                        {fmt === 'all' ? '전체' : fmt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Hide Tiny Icons Toggle */}
+                <label className="inline-flex items-center gap-1.5 cursor-pointer text-zinc-600 select-none">
+                  <input
+                    type="checkbox"
+                    checked={hideSmallImages}
+                    onChange={(e) => setHideSmallImages(e.target.checked)}
+                    className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>초소형 아이콘/픽셀 제외</span>
+                </label>
               </div>
 
-              {/* Format Filter */}
-              <div className="flex items-center gap-1">
-                <span className="text-zinc-400 font-medium">포맷:</span>
-                <div className="flex items-center gap-0.5 bg-zinc-100 p-0.5 rounded-lg border border-zinc-200">
-                  {['all', 'jpg', 'png', 'webp'].map((fmt) => (
-                    <button
-                      key={fmt}
-                      type="button"
-                      onClick={() => setSelectedFormat(fmt)}
-                      className={`px-2 py-1 rounded text-xs font-semibold uppercase transition-colors ${
-                        selectedFormat === fmt
-                          ? 'bg-white text-black shadow-xs'
-                          : 'text-zinc-500 hover:text-zinc-900'
-                      }`}
-                    >
-                      {fmt === 'all' ? '전체' : fmt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Hide Tiny Icons Toggle */}
-              <label className="inline-flex items-center gap-1.5 cursor-pointer text-zinc-600 select-none">
+              {/* Search within images */}
+              <div className="flex items-center gap-1.5 bg-zinc-50 px-2.5 py-1 rounded-lg border border-zinc-200 w-full sm:w-56">
+                <Search className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                 <input
-                  type="checkbox"
-                  checked={hideSmallImages}
-                  onChange={(e) => setHideSmallImages(e.target.checked)}
-                  className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                  type="text"
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  placeholder="파일명 / 설명 검색"
+                  className="w-full bg-transparent border-none text-xs focus:outline-none placeholder-zinc-400"
                 />
-                <span>초소형 아이콘/픽셀 제외</span>
-              </label>
+                {searchKeyword && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchKeyword('')}
+                    className="text-zinc-400 hover:text-zinc-600"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Search within images */}
-            <div className="flex items-center gap-1.5 bg-zinc-50 px-2.5 py-1 rounded-lg border border-zinc-200 w-full sm:w-56">
-              <Search className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-              <input
-                type="text"
-                value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
-                placeholder="파일명 / 설명 검색"
-                className="w-full bg-transparent border-none text-xs focus:outline-none placeholder-zinc-400"
-              />
-              {searchKeyword && (
-                <button
-                  type="button"
-                  onClick={() => setSearchKeyword('')}
-                  className="text-zinc-400 hover:text-zinc-600"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              )}
+            {/* Row 2: Image Width Slider & Size Category Filter */}
+            <div className="w-full pt-2.5 border-t border-zinc-100 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+              {/* Category Preset Chips */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-zinc-500 font-semibold flex items-center gap-1">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>사이즈별 분류:</span>
+                </span>
+                {[
+                  { id: 'all', label: '전체 크기' },
+                  { id: 'thumb', label: '썸네일 (<300px)' },
+                  { id: 'medium', label: '중형 (300~799px)' },
+                  { id: 'large', label: '대형 (800~1199px)' },
+                  { id: 'ultra', label: '초고화질 (1200px+)' },
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setSizeCategory(cat.id as any);
+                      if (cat.id !== 'all') {
+                        setMinWidthFilter(0);
+                      }
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      sizeCategory === cat.id
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Width Slider Control */}
+              <div className="flex items-center gap-2.5 bg-zinc-50 p-1.5 px-3 rounded-xl border border-zinc-200">
+                <div className="flex items-center gap-1 text-zinc-600 font-medium whitespace-nowrap">
+                  <span>가로 너비 슬라이더:</span>
+                  <span className="px-1.5 py-0.5 rounded bg-white border border-zinc-200 text-emerald-700 font-bold font-mono">
+                    {minWidthFilter === 0 ? '전체 (0px~)' : `${minWidthFilter}px 이상`}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={1600}
+                  step={50}
+                  value={minWidthFilter}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setMinWidthFilter(val);
+                    if (val > 0) {
+                      setSizeCategory('all');
+                    }
+                  }}
+                  className="w-28 sm:w-36 h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                  title={`가로 ${minWidthFilter}px 이상 필터링`}
+                />
+                {minWidthFilter > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setMinWidthFilter(0)}
+                    className="text-[11px] text-zinc-400 hover:text-zinc-700 underline shrink-0"
+                    title="슬라이더 초기화"
+                  >
+                    초기화
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1131,6 +1330,8 @@ export function WebImageExtractor({
                   setSelectedType('all');
                   setSelectedMall('all');
                   setHideSmallImages(false);
+                  setMinWidthFilter(0);
+                  setSizeCategory('all');
                   setSearchKeyword('');
                 }}
                 className="mt-3 text-xs text-emerald-600 hover:underline font-bold"
@@ -1145,6 +1346,7 @@ export function WebImageExtractor({
                   key={img.id}
                   img={img}
                   dims={imageDims[img.id]}
+                  sizeBytes={imageSizes[img.url]}
                   isSelected={Boolean(img.selected)}
                   onToggleSelect={handleToggleSelect}
                   onOpenLightbox={setLightboxImage}
@@ -1207,12 +1409,14 @@ export function WebImageExtractor({
         <LightboxModal
           image={lightboxImage}
           images={filteredImages}
+          dims={imageDims[lightboxImage.id]}
+          sizeBytes={imageSizes[lightboxImage.url]}
           onClose={() => setLightboxImage(null)}
           onSelectImage={setLightboxImage}
           onDownloadSingle={handleDownloadSingle}
           onSendToOptimizer={onSendToOptimizer ? async (img) => {
             try {
-              const blob = await fetchImageBlob(img.url);
+              const blob = await fetchImageBlob(img.url, img.originalUrl);
               const filename = img.alt ? `${img.alt}.${img.format}` : `extracted-${img.id}.${img.format}`;
               const file = blobToFile(blob, filename);
               onSendToOptimizer([file]);
@@ -1224,6 +1428,26 @@ export function WebImageExtractor({
           copyFeedback={copyFeedback}
         />
       )}
+
+      {/* Floating Bottom-Right Success Toast (unobtrusive, compact, doesn't shift layout) */}
+      {successToast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full sm:w-auto bg-zinc-900/95 backdrop-blur-md border border-emerald-500/50 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center justify-between gap-3 text-xs animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+              <Check className="w-3.5 h-3.5" />
+            </span>
+            <span className="font-medium text-zinc-100 truncate">{successToast}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessToast(null)}
+            className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors shrink-0 cursor-pointer"
+            title="닫기"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1234,6 +1458,7 @@ export function WebImageExtractor({
 function ImageGridCard({
   img,
   dims,
+  sizeBytes,
   isSelected,
   onToggleSelect,
   onOpenLightbox,
@@ -1245,6 +1470,7 @@ function ImageGridCard({
   key?: React.Key;
   img: ExtractedImageItem;
   dims?: { width: number; height: number };
+  sizeBytes?: number;
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
   onOpenLightbox: (img: ExtractedImageItem) => void;
@@ -1308,8 +1534,11 @@ function ImageGridCard({
               고화질 원본
             </span>
           )}
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-black/75 text-white backdrop-blur-xs">
-            {img.format}
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-black/75 text-white backdrop-blur-xs flex items-center gap-1">
+            <span>{img.format}</span>
+            {sizeBytes !== undefined && (
+              <span className="text-zinc-300 font-normal">· {formatBytes(sizeBytes)}</span>
+            )}
           </span>
         </div>
       </div>
@@ -1381,15 +1610,18 @@ function ImageGridCard({
           {img.alt || img.url.split('/').pop()?.split('?')[0] || '이미지'}
         </p>
 
-        <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono">
-          <span>{dims ? `${dims.width}×${dims.height}` : '크기 확인 중...'}</span>
+        <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono">
+          <span className="truncate" title={dims ? `${dims.width}×${dims.height} px ${sizeBytes ? `· ${formatBytes(sizeBytes)}` : ''}` : undefined}>
+            {dims ? `${dims.width}×${dims.height}` : '크기 확인 중...'}
+            {sizeBytes !== undefined && ` · ${formatBytes(sizeBytes)}`}
+          </span>
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onCopyUrl(img.url);
             }}
-            className="text-zinc-400 hover:text-zinc-700 p-0.5"
+            className="text-zinc-400 hover:text-zinc-700 p-0.5 shrink-0 ml-1"
             title="이미지 URL 주소 복사"
           >
             {copyFeedback === img.url ? (
@@ -1411,6 +1643,8 @@ function ImageGridCard({
 function LightboxModal({
   image,
   images,
+  dims,
+  sizeBytes,
   onClose,
   onSelectImage,
   onDownloadSingle,
@@ -1420,6 +1654,8 @@ function LightboxModal({
 }: {
   image: ExtractedImageItem;
   images: ExtractedImageItem[];
+  dims?: { width: number; height: number };
+  sizeBytes?: number;
   onClose: () => void;
   onSelectImage: (img: ExtractedImageItem) => void;
   onDownloadSingle: (img: ExtractedImageItem) => void;
@@ -1489,6 +1725,16 @@ function LightboxModal({
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono uppercase shrink-0">
               {image.format}
             </span>
+            {dims && (
+              <span className="text-[11px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 font-mono shrink-0">
+                {dims.width}×{dims.height} px
+              </span>
+            )}
+            {sizeBytes !== undefined && (
+              <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-500/40 font-mono shrink-0 font-bold">
+                {formatBytes(sizeBytes)}
+              </span>
+            )}
             {image.isHighRes && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-600 text-white font-bold shrink-0">
                 고화질 원본

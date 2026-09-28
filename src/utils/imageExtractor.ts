@@ -420,17 +420,21 @@ function loadImageToBlobViaCanvas(url: string): Promise<Blob> {
 }
 
 /**
- * Downloads image as a Blob with multi-layer proxy fallback
+ * Downloads image as a Blob with multi-layer proxy fallback and originalUrl fail-safe
  */
-export async function fetchImageBlob(imageUrl: string): Promise<Blob> {
+export async function fetchImageBlob(imageUrl: string, fallbackUrl?: string): Promise<Blob> {
   if (imageUrl.startsWith('data:')) {
     const res = await fetch(imageUrl);
     return await res.blob();
   }
 
-  // 1. Local backend proxy with multi-referer fallback
+  // 1. Local backend proxy with fallbackUrl support
   try {
-    const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+    const params = new URLSearchParams({ url: imageUrl });
+    if (fallbackUrl && fallbackUrl !== imageUrl) {
+      params.set('fallbackUrl', fallbackUrl);
+    }
+    const proxyUrl = `/api/proxy-image?${params.toString()}`;
     const res = await fetch(proxyUrl);
     if (res.ok) {
       const blob = await res.blob();
@@ -441,20 +445,38 @@ export async function fetchImageBlob(imageUrl: string): Promise<Blob> {
   }
 
   // 2. Direct fetch with no-referrer
-  try {
-    const res = await fetch(imageUrl, {
-      mode: 'cors',
-      referrerPolicy: 'no-referrer',
-    });
-    if (res.ok) {
-      const blob = await res.blob();
-      if (blob.size > 100) return blob;
-    }
-  } catch {
-    // continue to canvas
+  const urlsToTry = [imageUrl];
+  if (fallbackUrl && fallbackUrl !== imageUrl) {
+    urlsToTry.push(fallbackUrl);
   }
 
-  // 3. Client Canvas drawing (works if server sends standard CORS)
+  for (const target of urlsToTry) {
+    try {
+      const res = await fetch(target, {
+        mode: 'cors',
+        referrerPolicy: 'no-referrer',
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob.size > 100) return blob;
+      }
+    } catch {
+      // continue
+    }
+  }
+
+  // 3. Client Canvas drawing with proxy (guarantees CORS headers from server)
+  try {
+    const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+    const canvasBlob = await loadImageToBlobViaCanvas(proxyUrl);
+    if (canvasBlob && canvasBlob.size > 100) {
+      return canvasBlob;
+    }
+  } catch {
+    // continue
+  }
+
+  // 4. Client Canvas drawing direct
   try {
     const canvasBlob = await loadImageToBlobViaCanvas(imageUrl);
     if (canvasBlob && canvasBlob.size > 100) {
@@ -464,11 +486,14 @@ export async function fetchImageBlob(imageUrl: string): Promise<Blob> {
     // continue to public CORS proxies
   }
 
-  // 4. Public CORS proxies
+  // 5. Public CORS proxies
   const corsProxies = [
     `https://api.allorigins.win/raw?url=${encodeURIComponent(imageUrl)}`,
     `https://corsproxy.io/?${encodeURIComponent(imageUrl)}`,
   ];
+  if (fallbackUrl && fallbackUrl !== imageUrl) {
+    corsProxies.push(`https://corsproxy.io/?${encodeURIComponent(fallbackUrl)}`);
+  }
 
   for (const p of corsProxies) {
     try {
@@ -492,15 +517,17 @@ export function blobToFile(blob: Blob, fileName: string): File {
 export async function downloadExtractedImagesAsZip(
   images: ExtractedImageItem[],
   zipTitle = 'extracted-images'
-): Promise<void> {
+): Promise<{ total: number; successCount: number }> {
   const zip = new JSZip();
   const folderName = zipTitle.replace(/[^a-zA-Z0-9가-힣_-]/g, '_').slice(0, 30) || 'web_images';
   const folder = zip.folder(folderName) || zip;
 
   let index = 1;
+  let failedCount = 0;
+
   for (const item of images) {
     try {
-      const blob = await fetchImageBlob(item.url);
+      const blob = await fetchImageBlob(item.url, item.originalUrl);
       let ext = item.format || 'jpg';
       if (ext === 'image' || !ext) {
         ext = blob.type.split('/')[1] || 'jpg';
@@ -513,11 +540,18 @@ export async function downloadExtractedImagesAsZip(
       index++;
     } catch (err) {
       console.warn(`Skipping failed image in zip: ${item.url}`, err);
+      failedCount++;
     }
+  }
+
+  const successCount = index - 1;
+  if (successCount === 0) {
+    throw new Error('선택된 이미지들의 원본 데이터를 가져오지 못했습니다. 사이트 보안 설정을 확인해주세요.');
   }
 
   const zipBlob = await zip.generateAsync({ type: 'blob' });
   downloadBlob(zipBlob, `${folderName}.zip`);
+  return { total: images.length, successCount };
 }
 
 /**
@@ -643,16 +677,18 @@ export function generateBookmarkletCode(appUrl: string): string {
       btnOpen.innerHTML = "⏳ 전송 및 여는 중...";
       try { navigator.clipboard.writeText(urls.join("\\n")); } catch(e) {}
 
+      var transferTimestamp = Date.now();
       try {
         fetch(APP_URL + "/api/transfer-images", {
           method: "POST",
           mode: "cors",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: document.title, pageUrl: location.href, images: urls })
+          body: JSON.stringify({ title: document.title, pageUrl: location.href, images: urls, timestamp: transferTimestamp })
         }).catch(function() {});
       } catch(e) {}
 
-      var targetUrl = APP_URL + "?mode=extractor&source=bookmarklet&t=" + Date.now();
+      var separator = APP_URL.indexOf("?") === -1 ? "?" : "&";
+      var targetUrl = APP_URL + separator + "mode=extractor&source=bookmarklet&refresh=" + transferTimestamp;
       var win = window.open(targetUrl, "AIS_IMAGE_EXTRACTOR_MAIN");
       if (win) {
         try { win.focus(); } catch(e) {}
@@ -662,11 +698,11 @@ export function generateBookmarkletCode(appUrl: string): string {
           try {
             win.postMessage({
               type: "AIS_IMAGES_TRANSFER",
-              payload: { title: document.title, pageUrl: location.href, images: urls }
+              payload: { title: document.title, pageUrl: location.href, images: urls, timestamp: transferTimestamp }
             }, "*");
           } catch(e) {}
-          if (cnt > 35) clearInterval(tmr);
-        }, 300);
+          if (cnt > 5) clearInterval(tmr);
+        }, 400);
         btnOpen.innerHTML = "✓ 이미지추출기로 전송 완료!";
       } else {
         alert("브라우저 팝업이 차단되었습니다. 주소창 우측에서 팝업 허용을 눌러주세요!");
